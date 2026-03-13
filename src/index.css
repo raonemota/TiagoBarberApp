@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-gold: #D4AF37;
+  --color-gold-light: #F2D06B;
+  --color-gold-dark: #A67C00;
+  
+  --color-bg-dark: #0a0502;
+  --color-card-dark: #1a1614;
+  --color-card-border: rgba(212, 175, 55, 0.1);
+
+  @keyframes gradient-x {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+}
+
+@utility animate-gradient-x {
+  animation: gradient-x 3s ease infinite;
+  background-size: 200% 200%;
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--color-bg-dark)] text-white antialiased;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.05) 0%, transparent 50%),
+      radial-gradient(circle at 0% 100%, rgba(212, 175, 55, 0.02) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+}
+
+@utility gold-gradient-text {
+  @apply bg-gradient-to-b from-[var(--color-gold-light)] to-[var(--color-gold-dark)] bg-clip-text text-transparent;
+}
+
+@utility gold-border {
+  @apply border border-[var(--color-gold)]/20;
+}
+
+@utility dark-card {
+  @apply bg-[var(--color-card-dark)] rounded-2xl gold-border shadow-xl;
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility btn-gold {
+  @apply bg-gradient-to-b from-[var(--color-gold-light)] to-[var(--color-gold-dark)] text-black font-bold py-3 px-6 rounded-xl transition-all active:scale-95 hover:shadow-[0_0_15px_rgba(212,175,55,0.3)];
+}
+
+@utility btn-outline-gold {
+  @apply border border-[var(--color-gold)] text-[var(--color-gold)] font-medium py-2 px-4 rounded-xl transition-all hover:bg-[var(--color-gold)]/10 active:scale-95;
+}

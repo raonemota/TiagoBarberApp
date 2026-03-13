@@ -1,0 +1,5 @@
+{
+  "name": "BarberSchedule",
+  "description": "Aplicativo web completo de agendamento para barbearia com painéis para clientes, barbeiros e administradores.",
+  "requestFramePermissions": []
+}
