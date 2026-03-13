@@ -31,7 +31,7 @@ interface Barber {
   users: any;
 }
 
-const BARBER_ILLUSTRATION = "https://zuwdcmdcrofvfexmbilg.supabase.co/storage/v1/object/public/config/barber-illustration.png"; // Placeholder illustration
+const BARBER_ILLUSTRATION = "https://zuwdcmdcrofvfexmbilg.supabase.co/storage/v1/object/public/config/barber-illustration.png";
 
 const Mustache = ({ className }: { className?: string }) => (
   <svg 
@@ -85,15 +85,22 @@ export default function ClientHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { showNotification } = useNotification();
+  
   const [futureAppointments, setFutureAppointments] = useState<Appointment[]>([]);
   const [featuredServices, setFeaturedServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
+  
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  
+  // Estados para o novo modal de cancelamento
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -144,7 +151,7 @@ export default function ClientHome() {
         `)
         .eq('client_id', profile?.id)
         .gte('date', today)
-        .neq('status', 'cancelled') // Filtra os cancelados para não aparecerem
+        .neq('status', 'cancelled')
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -184,32 +191,28 @@ export default function ClientHome() {
     setIsUnitModalOpen(false);
   };
 
-const handleCancelAppointment = async (id: string) => {
-    // Usando window.confirm para garantir compatibilidade em todos os navegadores
-    if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
-    
+  const confirmCancellation = async () => {
+    if (!appointmentToCancel) return;
     setCancelling(true);
+    
     try {
-      // Tenta atualizar o banco de dados
-      const { error, data } = await supabase
+      const { data, error } = await supabase
         .from('appointments')
         .update({ status: 'cancelled' })
-        .eq('id', id)
-        .select(); // Adicionamos select() para forçar o retorno do dado modificado
+        .eq('id', appointmentToCancel)
+        .select();
 
       if (error) throw error;
-
-      // Se passou direto mas não atualizou nada (geralmente problema de permissão/RLS)
-      if (data && data.length === 0) {
-         throw new Error("Nenhum agendamento foi alterado. Verifique as permissões (RLS) da tabela.");
-      }
+      if (!data || data.length === 0) throw new Error("Erro de permissão ao cancelar.");
       
-      showNotification('Agendamento cancelado com sucesso.');
-      setSelectedAppointment(null); // Fecha o modal
-      fetchDashboardData(); // Recarrega os dados sem o item cancelado
+      showNotification('Agendamento cancelado com sucesso.', 'success');
+      
+      setIsCancelModalOpen(false);
+      setAppointmentToCancel(null);
+      setSelectedAppointment(null); 
+      
+      fetchDashboardData();
     } catch (error: any) {
-      // O alert garante que a mensagem apareça NA FRENTE do modal
-      alert('Erro ao cancelar: ' + error.message);
       showNotification(error.message, 'error');
     } finally {
       setCancelling(false);
@@ -568,16 +571,56 @@ const handleCancelAppointment = async (id: string) => {
                 </button>
                 <button
                   disabled={cancelling}
-                  onClick={() => handleCancelAppointment(selectedAppointment.id)}
+                  onClick={() => {
+                    setAppointmentToCancel(selectedAppointment.id);
+                    setIsCancelModalOpen(true);
+                  }}
                   className="flex items-center justify-center gap-2 py-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500/20 transition-all disabled:opacity-50"
                 >
-                  {cancelling ? 'Cancelando...' : <><Trash2 className="h-4 w-4" /> Cancelar</>}
+                  <Trash2 className="h-4 w-4" /> Cancelar
                 </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Confirmação de Cancelamento Personalizado */}
+      {isCancelModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-sm p-8 shadow-2xl ring-1 ring-red-500/20 animate-in zoom-in duration-300">
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-16 h-16 bg-red-500/10 rounded-2xl border border-red-500/20 flex items-center justify-center text-red-500 mb-6">
+                <Trash2 className="h-8 w-8" />
+              </div>
+              <h3 className="text-xl font-black text-white uppercase tracking-tight">Cancelar Agendamento?</h3>
+              <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">
+                Esta ação não pode ser desfeita. O horário ficará livre para outro cliente.
+              </p>
+              
+              <div className="flex gap-3 pt-6">
+                <button 
+                  onClick={() => {
+                    setIsCancelModalOpen(false);
+                    setAppointmentToCancel(null);
+                  }}
+                  disabled={cancelling}
+                  className="flex-1 py-4 rounded-xl border border-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button 
+                  onClick={confirmCancellation}
+                  disabled={cancelling}
+                  className="flex-1 py-4 rounded-xl bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                >
+                  {cancelling ? 'Aguarde...' : 'Sim, Cancelar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

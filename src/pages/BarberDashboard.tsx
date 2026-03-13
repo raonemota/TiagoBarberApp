@@ -100,6 +100,7 @@ export default function BarberDashboard() {
           service:services(name, price)
         `)
         .eq('barber_id', barberData.id)
+        .neq('status', 'cancelled')
         .gte('date', today)
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
