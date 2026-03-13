@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,7 +15,7 @@ interface Appointment {
   end_time?: string;
   notes?: string;
   status?: string;
-  service: { id: string; name: string };
+  service: { id: string; name: string; price: number };
   barber: { id: string; users: { name: string; avatar_url?: string | null } };
 }
 
@@ -24,6 +24,7 @@ interface Service {
   name: string;
   price: number;
   category: string;
+  duration_minutes: number;
 }
 
 interface Barber {
@@ -81,6 +82,27 @@ interface Unit {
   google_maps_link: string;
 }
 
+// Função para agrupar agendamentos (Comanda)
+const groupAppointmentsByDateAndBarber = (apts: Appointment[]) => {
+  const groups: Record<string, Appointment[]> = {};
+  apts.forEach(apt => {
+    const barberName = apt.barber?.users?.name || 'Profissional';
+    const key = `${apt.date}_${barberName}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(apt);
+  });
+
+  const sortedGroups = Object.values(groups).map(group => {
+    return group.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  });
+
+  return sortedGroups.sort((a, b) => {
+    const dateCmp = a[0].date.localeCompare(b[0].date);
+    if (dateCmp !== 0) return dateCmp;
+    return a[0].start_time.localeCompare(b[0].start_time);
+  });
+};
+
 export default function ClientHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -95,12 +117,10 @@ export default function ClientHome() {
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  // O item selecionado agora é um grupo de serviços (Comanda)
+  const [selectedGroup, setSelectedGroup] = useState<Appointment[] | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  
-  // Estados para o novo modal de cancelamento
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -146,8 +166,8 @@ export default function ClientHome() {
         .from('appointments')
         .select(`
           id, date, start_time, end_time, notes, status,
-          service:services(name),
-          barber:barbers(users:user_id(name, avatar_url))
+          service:services(id, name, price),
+          barber:barbers(id, users:user_id(name, avatar_url))
         `)
         .eq('client_id', profile?.id)
         .gte('date', today)
@@ -192,24 +212,23 @@ export default function ClientHome() {
   };
 
   const confirmCancellation = async () => {
-    if (!appointmentToCancel) return;
+    if (!selectedGroup) return;
     setCancelling(true);
     
     try {
-      const { data, error } = await supabase
+      const ids = selectedGroup.map(a => a.id);
+      
+      const { error } = await supabase
         .from('appointments')
         .update({ status: 'cancelled' })
-        .eq('id', appointmentToCancel)
-        .select();
+        .in('id', ids);
 
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Erro de permissão ao cancelar.");
       
       showNotification('Agendamento cancelado com sucesso.', 'success');
       
       setIsCancelModalOpen(false);
-      setAppointmentToCancel(null);
-      setSelectedAppointment(null); 
+      setSelectedGroup(null); 
       
       fetchDashboardData();
     } catch (error: any) {
@@ -219,10 +238,11 @@ export default function ClientHome() {
     }
   };
 
-  const handleReschedule = (apt: Appointment) => {
+  const handleReschedule = (group: Appointment[]) => {
+    const apt = group[0];
     const unitId = (apt as any).unit_id;
-    const serviceId = (apt as any).service_id || (apt.service as any)?.id;
-    const barberId = (apt as any).barber_id || (apt.barber as any)?.id;
+    const serviceId = (apt as any).service_id || apt.service?.id;
+    const barberId = (apt as any).barber_id || apt.barber?.id;
     
     let url = `/booking?reschedule=${apt.id}`;
     if (unitId) url += `&unit=${unitId}`;
@@ -231,6 +251,9 @@ export default function ClientHome() {
     
     navigate(url);
   };
+
+  // Agrupa os agendamentos para exibição visual
+  const groupedFutureAppointments = useMemo(() => groupAppointmentsByDateAndBarber(futureAppointments), [futureAppointments]);
 
   if (loading) {
     return (
@@ -270,7 +293,7 @@ export default function ClientHome() {
         )}
       </div>
 
-      {/* Promotional Banners */}
+      {/* Promotional Banners 
       <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-visible">
         {BANNERS.map((banner) => (
           <motion.div
@@ -287,7 +310,7 @@ export default function ClientHome() {
             </div>
           </motion.div>
         ))}
-      </div>
+      </div>*/}
 
       {/* New Appointment Button - Creative */}
       <button 
@@ -307,49 +330,54 @@ export default function ClientHome() {
       </button>
 
       {/* Future Appointments */}
-      {futureAppointments.length > 0 && (
+      {groupedFutureAppointments.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-4 px-2">
             <h3 className="text-[10px] font-bold text-gold uppercase tracking-widest">Seus Agendamentos</h3>
             <span className="h-[1px] flex-1 bg-white/5 mx-4"></span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {futureAppointments.map((apt) => (
-              <div 
-                key={apt.id} 
-                onClick={() => setSelectedAppointment(apt)}
-                className="dark-card p-5 flex flex-col gap-4 cursor-pointer hover:border-gold/30 transition-all"
-              >
-                <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                  <div className="flex items-center gap-3">
-                    <Calendar className="h-4 w-4 text-gold" />
-                    <span className="font-bold capitalize text-[11px] tracking-wide text-zinc-300">
-                      {format(parseISO(apt.date), "EEEE, d 'de' MMMM", { locale: ptBR })}
-                    </span>
+            {groupedFutureAppointments.map((group, index) => {
+              const firstApt = group[0];
+              const barberName = firstApt.barber?.users?.name || 'Profissional';
+              const startTime = firstApt.start_time.substring(0, 5);
+              const serviceNames = group.map(a => a.service?.name).join(' + ');
+
+              return (
+                <div 
+                  key={index} 
+                  onClick={() => setSelectedGroup(group)}
+                  className="dark-card p-5 flex flex-col gap-4 cursor-pointer hover:border-gold/30 transition-all"
+                >
+                  <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-gold" />
+                      <span className="font-bold capitalize text-[11px] tracking-wide text-zinc-300">
+                        {format(parseISO(firstApt.date), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 font-black text-gold text-sm">
+                      <Clock className="h-4 w-4" />
+                      {startTime}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 font-black text-gold text-sm">
-                    <Clock className="h-4 w-4" />
-                    {apt.start_time.substring(0, 5)}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-black text-lg uppercase tracking-tight text-white truncate max-w-[200px]">
+                        {serviceNames}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-1 uppercase tracking-widest font-bold">
+                        <UserIcon className="h-3 w-3 text-gold" />
+                        {barberName}
+                      </p>
+                    </div>
+                    <button className="p-2 rounded-lg bg-white/5 text-gold hover:bg-gold/10 transition-colors">
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-black text-lg uppercase tracking-tight text-white">
-                      {apt.notes?.startsWith('Serviços:') 
-                        ? apt.notes.split('|')[0].replace('Serviços:', '').trim()
-                        : apt.service?.name || 'Serviço'}
-                    </p>
-                    <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-1 uppercase tracking-widest font-bold">
-                      <UserIcon className="h-3 w-3 text-gold" />
-                      {apt.barber?.users?.name || 'Profissional'}
-                    </p>
-                  </div>
-                  <button className="p-2 rounded-lg bg-white/5 text-gold hover:bg-gold/10 transition-colors">
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
@@ -504,7 +532,7 @@ export default function ClientHome() {
 
       {/* Appointment Details Modal */}
       <AnimatePresence>
-        {selectedAppointment && (
+        {selectedGroup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -513,7 +541,7 @@ export default function ClientHome() {
               className="dark-card p-8 max-w-md w-full space-y-8 relative"
             >
               <button 
-                onClick={() => setSelectedAppointment(null)}
+                onClick={() => setSelectedGroup(null)}
                 className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white transition-colors"
               >
                 <X className="h-6 w-6" />
@@ -526,55 +554,52 @@ export default function ClientHome() {
                 <h3 className="text-xl font-black text-white uppercase tracking-tight">Detalhes do Agendamento</h3>
                 <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Confira as informações abaixo</p>
               </div>
+
               <div className="space-y-4 bg-white/5 rounded-2xl p-6 border border-white/5">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start border-b border-white/5 pb-4">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Serviço(s)</span>
-                  <div className="text-right">
-                    <span className="font-black text-white uppercase block">
-                      {selectedAppointment.notes?.startsWith('Serviços:') 
-                        ? selectedAppointment.notes.split('|')[0].replace('Serviços:', '').trim()
-                        : selectedAppointment.service?.name}
-                    </span>
+                  <div className="text-right space-y-1">
+                    {selectedGroup.map(apt => (
+                      <span key={apt.id} className="font-black text-white uppercase block text-sm">
+                        {apt.service?.name}
+                      </span>
+                    ))}
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
+                
+                <div className="flex justify-between items-center pt-1">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Profissional</span>
-                  <span className="font-black text-white uppercase">{selectedAppointment.barber?.users?.name}</span>
+                  <span className="font-black text-white uppercase">{selectedGroup[0].barber?.users?.name}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Data</span>
-                  <span className="font-black text-white uppercase">{format(parseISO(selectedAppointment.date), "dd 'de' MMMM", { locale: ptBR })}</span>
+                  <span className="font-black text-white uppercase">{format(parseISO(selectedGroup[0].date), "dd 'de' MMMM", { locale: ptBR })}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Horário</span>
                   <span className="font-black text-gold uppercase">
-                    {selectedAppointment.start_time.substring(0, 5)} 
-                    {selectedAppointment.end_time && ` - ${selectedAppointment.end_time.substring(0, 5)}`}
+                    {selectedGroup[0].start_time.substring(0, 5)} 
+                    {selectedGroup[selectedGroup.length - 1].end_time && ` - ${selectedGroup[selectedGroup.length - 1].end_time?.substring(0, 5)}`}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Valor</span>
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Valor Total</span>
                   <span className="font-black text-xl text-gold">
-                    {selectedAppointment.notes?.includes('| Total: R$')
-                      ? `R$ ${selectedAppointment.notes.split('| Total: R$')[1].trim().replace('.', ',')}`
-                      : 'R$ --'}
+                    R$ {selectedGroup.reduce((acc, apt) => acc + (apt.service?.price || 0), 0).toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <button
-                  onClick={() => handleReschedule(selectedAppointment)}
+                  onClick={() => handleReschedule(selectedGroup)}
                   className="flex items-center justify-center gap-2 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
                 >
                   <RefreshCw className="h-4 w-4" /> Reagendar
                 </button>
                 <button
                   disabled={cancelling}
-                  onClick={() => {
-                    setAppointmentToCancel(selectedAppointment.id);
-                    setIsCancelModalOpen(true);
-                  }}
+                  onClick={() => setIsCancelModalOpen(true)}
                   className="flex items-center justify-center gap-2 py-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-500/20 transition-all disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" /> Cancelar
@@ -600,10 +625,7 @@ export default function ClientHome() {
               
               <div className="flex gap-3 pt-6">
                 <button 
-                  onClick={() => {
-                    setIsCancelModalOpen(false);
-                    setAppointmentToCancel(null);
-                  }}
+                  onClick={() => setIsCancelModalOpen(false)}
                   disabled={cancelling}
                   className="flex-1 py-4 rounded-xl border border-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-colors"
                 >

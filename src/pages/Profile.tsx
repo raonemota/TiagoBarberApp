@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -13,7 +13,8 @@ import {
   AlertCircle,
   X,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  XCircle
 } from 'lucide-react';
 import { format, parseISO, isAfter, startOfToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -58,10 +59,6 @@ export default function Profile() {
         `);
 
       if (profile?.role === 'barber') {
-        // If barber, we might want to see both their own appointments as a client 
-        // AND their appointments as a barber.
-        // But usually, a barber profile should show their professional stats.
-        // Let's fetch appointments where they are the barber.
         const { data: barberData } = await supabase
           .from('barbers')
           .select('id')
@@ -102,7 +99,7 @@ export default function Profile() {
   };
 
   const handleCancelAppointment = async (id: string) => {
-    if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+    if (!confirm('Tem certeza que deseja cancelar este agendamento específico?')) return;
     
     setCancelling(true);
     try {
@@ -124,8 +121,6 @@ export default function Profile() {
   };
 
   const handleReschedule = (apt: Appointment) => {
-    // Navigate to booking with params to reschedule
-    // We'll pass the unit if available, and the service
     const unitId = (apt as any).unit_id;
     const serviceId = (apt as any).service_id || apt.service?.id;
     const barberId = (apt as any).barber_id || apt.barber?.id;
@@ -144,13 +139,37 @@ export default function Profile() {
   );
 
   const pastAppointments = appointments.filter(apt => 
-    apt.status === 'completed' || 
+    apt.status === 'completed' || apt.status === 'cancelled' || 
     (!isAfter(parseISO(apt.date), startOfToday()) && apt.date !== format(new Date(), 'yyyy-MM-dd'))
   );
 
   const totalSpent = appointments
     .filter(apt => apt.status === 'completed')
     .reduce((acc, apt) => acc + (apt.service?.price || 0), 0);
+
+  // AGRUPAMENTO DOS ATIVOS VISUALMENTE
+  const groupedActive = useMemo(() => {
+    const groups = new Map<string, Appointment[]>();
+    activeAppointments.forEach(apt => {
+       const personName = profile?.role === 'barber' ? ((apt as any).client?.name || 'Cliente') : (apt.barber?.users?.name || 'Profissional');
+       const key = `${apt.date}_${personName}`;
+       if (!groups.has(key)) groups.set(key, []);
+       groups.get(key)!.push(apt);
+    });
+    return Array.from(groups.values());
+  }, [activeAppointments, profile?.role]);
+
+  // AGRUPAMENTO DO HISTÓRICO VISUALMENTE
+  const groupedHistory = useMemo(() => {
+    const groups = new Map<string, Appointment[]>();
+    pastAppointments.forEach(apt => {
+       const personName = profile?.role === 'barber' ? ((apt as any).client?.name || 'Cliente') : (apt.barber?.users?.name || 'Profissional');
+       const key = `${apt.date}_${personName}`;
+       if (!groups.has(key)) groups.set(key, []);
+       groups.get(key)!.push(apt);
+    });
+    return Array.from(groups.values());
+  }, [pastAppointments, profile?.role]);
 
   if (loading) {
     return (
@@ -211,7 +230,7 @@ export default function Profile() {
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
               {profile?.role === 'barber' ? 'Faturamento' : 'Investido'}
             </p>
-            <p className="text-xl font-black text-gold">R$ {totalSpent}</p>
+            <p className="text-xl font-black text-gold">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
           </div>
           <div className="text-center">
             <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Nível</p>
@@ -232,34 +251,64 @@ export default function Profile() {
           <span className="h-[1px] flex-1 bg-white/5 mx-4"></span>
         </div>
 
-        {activeAppointments.length > 0 ? (
+        {groupedActive.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeAppointments.map((apt) => (
-              <button 
-                key={apt.id} 
-                onClick={() => setSelectedAppointment(apt)}
-                className="dark-card p-4 flex items-center justify-between group text-left w-full hover:border-gold/30 transition-all"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-gold/10 flex flex-col items-center justify-center text-gold border border-gold/20">
-                    <span className="text-[10px] font-black leading-none mb-0.5">{format(parseISO(apt.date), 'dd')}</span>
-                    <span className="text-[8px] font-bold uppercase">{format(parseISO(apt.date), 'MMM', { locale: ptBR })}</span>
+            {groupedActive.map((group, index) => {
+              const firstApt = group[0];
+              const personName = profile?.role === 'barber' ? (firstApt as any).client?.name : firstApt.barber?.users?.name;
+              const startTime = firstApt.start_time.substring(0, 5);
+              const validGroup = group.filter(a => a.status !== 'cancelled');
+              const totalPrice = validGroup.reduce((sum, a) => sum + (a.service?.price || 0), 0);
+              
+              return (
+                <div key={index} className="dark-card p-4 w-full flex flex-col hover:border-gold/30 transition-all border border-transparent">
+                  <div className="flex items-start gap-4 mb-3 pb-3 border-b border-white/5">
+                    <div className="h-12 w-12 rounded-xl bg-gold/10 flex flex-col items-center justify-center text-gold border border-gold/20 shrink-0">
+                        <span className="text-[10px] font-black leading-none mb-0.5">{format(parseISO(firstApt.date), 'dd')}</span>
+                        <span className="text-[8px] font-bold uppercase">{format(parseISO(firstApt.date), 'MMM', { locale: ptBR })}</span>
+                      </div>
+                      <div>
+                        <p className="font-black text-white uppercase tracking-tight">{personName}</p>
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
+                          <Clock className="h-3 w-3" /> Início às {startTime}
+                        </div>
+                      </div>
                   </div>
-                  <div>
-                    <p className="font-black text-white uppercase tracking-tight">{apt.service?.name}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                      <Clock className="h-3 w-3" /> {apt.start_time} • {profile?.role === 'barber' ? (apt as any).client?.name : apt.barber?.users?.name}
-                    </div>
+
+                  <div className="space-y-2 mb-3">
+                    {group.map(apt => (
+                        <div key={apt.id} className="flex items-center justify-between group/item">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-zinc-300">
+                              {apt.service?.name}
+                              {apt.status === 'cancelled' && <span className="ml-2 text-[8px] text-red-500 bg-red-500/10 px-1 rounded uppercase tracking-widest">Cancelado</span>}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                              {apt.start_time.substring(0,5)} {apt.end_time ? `- ${apt.end_time.substring(0,5)}` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-xs font-black ${apt.status === 'cancelled' ? 'text-zinc-600 line-through' : 'text-gold'}`}>
+                              R$ {apt.service?.price?.toFixed(2)}
+                            </span>
+                            
+                            {apt.status !== 'cancelled' && (
+                              <button onClick={() => setSelectedAppointment(apt)} className="p-1 text-zinc-600 hover:text-gold transition-colors opacity-0 group-hover/item:opacity-100" title="Detalhes / Gerenciar">
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Total da Comanda</span>
+                    <span className="text-sm font-black text-white">R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="inline-block px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-black uppercase tracking-widest">
-                    Confirmado
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-gold transition-colors" />
-                </div>
-              </button>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="text-center py-8 bg-white/5 rounded-3xl border border-dashed border-white/10">
@@ -274,31 +323,63 @@ export default function Profile() {
         <div className="flex items-center justify-between mb-4 px-2">
           <div className="flex items-center gap-2">
             <History className="h-4 w-4 text-zinc-500" />
-            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Últimos Serviços</h3>
+            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Histórico de Serviços</h3>
           </div>
           <span className="h-[1px] flex-1 bg-white/5 mx-4"></span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {pastAppointments.slice(0, 6).map((apt) => (
-            <div key={apt.id} className="flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-600">
-                  <CheckCircle2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-zinc-300">{apt.service?.name}</p>
-                  <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">
-                    {format(parseISO(apt.date), "dd 'de' MMMM", { locale: ptBR })}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto no-scrollbar pr-1 pb-4">
+          {groupedHistory.map((group, index) => {
+            const firstApt = group[0];
+            const isCancelled = group.every(a => a.status === 'cancelled');
+            const isCompleted = group.every(a => a.status === 'completed');
+            
+            // Valor total: soma apenas o que não foi cancelado
+            const totalPrice = group.reduce((sum, a) => a.status !== 'cancelled' ? sum + (a.service?.price || 0) : sum, 0);
+
+            return (
+              <div key={index} className={`flex flex-col p-3 rounded-2xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 ${isCancelled ? 'opacity-60 grayscale-[50%]' : ''}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 ${isCancelled ? 'bg-red-500/10 text-red-500' : isCompleted ? 'bg-emerald-500/10 text-emerald-500' : 'bg-zinc-900 text-zinc-600'}`}>
+                      {isCancelled ? <XCircle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                        {format(parseISO(firstApt.date), "dd 'de' MMM", { locale: ptBR })} • Início {firstApt.start_time.substring(0, 5)}
+                      </p>
+                      {isCancelled && (
+                        <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 font-black uppercase tracking-widest inline-block mt-0.5">
+                          Cancelado
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className={`text-sm font-black ${isCancelled ? 'text-zinc-600 line-through' : 'text-zinc-400'}`}>
+                    R$ {totalPrice.toFixed(2).replace('.', ',')}
                   </p>
                 </div>
+                
+                <div className="pl-14 space-y-1">
+                   {group.map(apt => (
+                      <div key={apt.id} className="flex justify-between items-center">
+                         <span className={`text-xs font-bold ${apt.status === 'cancelled' ? 'text-zinc-600 line-through' : 'text-zinc-400'}`}>
+                           • {apt.service?.name}
+                         </span>
+                         <span className={`text-[10px] font-bold ${apt.status === 'cancelled' ? 'text-zinc-600 line-through' : 'text-zinc-500'}`}>
+                           R$ {apt.service?.price?.toFixed(2)}
+                         </span>
+                      </div>
+                   ))}
+                </div>
               </div>
-              <p className="text-sm font-black text-zinc-500">R$ {apt.service?.price}</p>
-            </div>
-          ))}
+            );
+          })}
           
-          {pastAppointments.length === 0 && (
-            <p className="text-center py-4 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Histórico vazio</p>
+          {groupedHistory.length === 0 && (
+            <div className="col-span-full text-center py-6 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+              Seu histórico está vazio.
+            </div>
           )}
         </div>
       </section>
@@ -342,18 +423,16 @@ export default function Profile() {
                 <div className="mx-auto w-16 h-16 bg-gold/10 text-gold rounded-2xl flex items-center justify-center border border-gold/20 mb-4">
                   <Calendar className="h-8 w-8" />
                 </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Detalhes do Agendamento</h3>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Detalhes do Serviço</h3>
                 <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Confira as informações abaixo</p>
               </div>
 
               <div className="space-y-4 bg-white/5 rounded-2xl p-6 border border-white/5">
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Serviço(s)</span>
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Serviço</span>
                   <div className="text-right">
                     <span className="font-black text-white uppercase block">
-                      {selectedAppointment.notes?.startsWith('Serviços:') 
-                        ? selectedAppointment.notes.split('|')[0].replace('Serviços:', '').trim()
-                        : selectedAppointment.service?.name}
+                      {selectedAppointment.service?.name}
                     </span>
                   </div>
                 </div>
@@ -375,9 +454,7 @@ export default function Profile() {
                 <div className="flex justify-between items-center pt-4 border-t border-white/5">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Valor</span>
                   <span className="font-black text-xl text-gold">
-                    {selectedAppointment.notes?.includes('| Total: R$')
-                      ? `R$ ${selectedAppointment.notes.split('| Total: R$')[1].trim().replace('.', ',')}`
-                      : `R$ ${selectedAppointment.service?.price.toFixed(2).replace('.', ',')}`}
+                    R$ {selectedAppointment.service?.price?.toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               </div>

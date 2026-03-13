@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ChevronLeft, CheckCircle2, Scissors, Sparkles, Zap, Star, Clock } from 'lucide-react';
-import { format, addDays, startOfToday, parseISO, addMinutes, parse } from 'date-fns';
+import { ChevronLeft, ChevronRight, CheckCircle2, Scissors, Sparkles, Zap, Star, Clock, Calendar, X } from 'lucide-react';
+import { format, addDays, startOfToday, addMinutes, parse, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const Mustache = ({ className }: { className?: string }) => (
@@ -56,23 +56,37 @@ export default function Booking() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
-  const [selectedBarber, setSelectedBarber] = useState<string | null>(null); // null, 'any' or barber_id
+  const [selectedBarber, setSelectedBarber] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  // Estados para o Calendário Personalizado
+  const [customDate, setCustomDate] = useState<Date | null>(null);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState(startOfMonth(startOfToday()));
+  
+  // Guarda os horários calculados de todos os dias
+  const [slotsPerDate, setSlotsPerDate] = useState<Record<string, string[]>>({});
+  
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+
+  // Gera os 14 dias iniciais para mostrar na rolagem rápida
+  const defaultDates = useMemo(() => Array.from({ length: 14 }).map((_, i) => addDays(startOfToday(), i)), []);
 
   useEffect(() => {
     fetchServicesAndBarbers();
   }, []);
 
+  // Quando o serviço ou barbeiro mudar, pré-calcula a disponibilidade de 60 dias
   useEffect(() => {
-    if (selectedServices.length > 0 && selectedBarber && selectedDate) {
-      calculateAvailableTimes();
+    if (selectedServices.length > 0 && selectedBarber) {
+      setSlotsPerDate({});
+      calculateAllDatesAvailability();
+    } else {
+      setSlotsPerDate({});
     }
-  }, [selectedServices, selectedBarber, selectedDate]);
+  }, [selectedServices, selectedBarber]);
 
   const fetchServicesAndBarbers = async () => {
     const unitId = searchParams.get('unit');
@@ -99,7 +113,6 @@ export default function Booking() {
     const { data: barbersData } = await query;
     if (barbersData) setBarbers(barbersData as any);
 
-    // Pre-select service if passed in URL
     const serviceId = searchParams.get('service');
     if (serviceId && servicesData) {
       const srv = servicesData.find(s => s.id === serviceId);
@@ -108,91 +121,113 @@ export default function Booking() {
       }
     }
 
-    // Pre-select barber if passed in URL
     const barberId = searchParams.get('barber');
     if (barberId) {
       setSelectedBarber(barberId);
     }
   };
 
-  const calculateAvailableTimes = async () => {
-    if (!selectedBarber || !selectedDate) return;
+  const calculateAllDatesAvailability = async () => {
+    if (!selectedBarber) return;
     setLoading(true);
 
     try {
-      const dayOfWeek = selectedDate.getDay();
       let barberId = selectedBarber;
-
-      // If 'any', we need to check availability for all barbers in the unit
-      // For simplicity in this step, let's pick the first available barber's schedule
       if (selectedBarber === 'any') {
         barberId = barbers[0]?.id;
       }
 
-      // 1. Fetch barber's working hours for this day
-      const { data: availability } = await supabase
+      // Calcula para os próximos 60 dias
+      const allDatesToCalculate = Array.from({ length: 60 }).map((_, i) => addDays(startOfToday(), i));
+      const todayStr = format(allDatesToCalculate[0], 'yyyy-MM-dd');
+      const lastDateStr = format(allDatesToCalculate[allDatesToCalculate.length - 1], 'yyyy-MM-dd');
+
+      const { data: availabilityData } = await supabase
         .from('barber_availability')
         .select('*')
         .eq('barber_id', barberId)
-        .eq('day_of_week', dayOfWeek)
-        .eq('is_active', true)
-        .single();
+        .eq('is_active', true);
 
-      if (!availability) {
-        setAvailableTimes([]);
-        return;
-      }
-
-      // 2. Fetch already booked appointments for this day
       const { data: bookedAppointments } = await supabase
         .from('appointments')
-        .select('start_time')
+        .select('date, start_time, end_time')
         .eq('barber_id', barberId)
-        .eq('date', format(selectedDate, 'yyyy-MM-dd'))
+        .gte('date', todayStr)
+        .lte('date', lastDateStr)
         .not('status', 'eq', 'cancelled');
 
-      const bookedTimes = bookedAppointments?.map(a => a.start_time.substring(0, 5)) || [];
-
-      // 2.5 Fetch blocks for this day
       const { data: blocks } = await supabase
         .from('barber_blocks')
         .select('*')
         .eq('barber_id', barberId)
-        .eq('date', format(selectedDate, 'yyyy-MM-dd'));
+        .gte('date', todayStr)
+        .lte('date', lastDateStr);
 
-      // 3. Generate slots between start_time and end_time
-      const slots = [];
-      let current = availability.start_time.substring(0, 5);
-      const end = availability.end_time.substring(0, 5);
+      const totalDuration = selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
 
-      while (current < end) {
-        const isBooked = bookedTimes.includes(current);
+      const addMins = (timeStr: string, mins: number) => {
+        const parsed = parse(timeStr, 'HH:mm', new Date());
+        return format(addMinutes(parsed, mins), 'HH:mm');
+      };
+
+      const newSlotsPerDate: Record<string, string[]> = {};
+
+      for (const date of allDatesToCalculate) {
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const dayOfWeek = date.getDay();
         
-        // Check if current slot is blocked
-        const isBlocked = blocks?.some(block => {
-          if (!block.start_time) return true; // Full day block
-          return current >= block.start_time.substring(0, 5) && current < block.end_time.substring(0, 5);
-        });
+        const availability = availabilityData?.find(a => a.day_of_week === dayOfWeek);
+        if (!availability) {
+          newSlotsPerDate[dateStr] = [];
+          continue;
+        }
 
-        if (!isBooked && !isBlocked) {
-          slots.push(current);
+        const dayAppointments = bookedAppointments?.filter(a => a.date === dateStr) || [];
+        const dayBlocks = blocks?.filter(b => b.date === dateStr) || [];
+
+        const slots = [];
+        let current = availability.start_time.substring(0, 5);
+        const shiftEnd = availability.end_time.substring(0, 5);
+
+        const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
+        const nowTime = format(new Date(), 'HH:mm');
+
+        while (current < shiftEnd) {
+          if (isToday && current <= nowTime) {
+              current = addMins(current, 30);
+              continue;
+          }
+
+          const proposedEnd = addMins(current, totalDuration);
+          if (proposedEnd > shiftEnd) break;
+
+          const isOverlappingAppointment = dayAppointments.some(apt => {
+            const aptStart = apt.start_time.substring(0, 5);
+            const aptEnd = apt.end_time.substring(0, 5);
+            return current < aptEnd && proposedEnd > aptStart;
+          });
+
+          const isOverlappingBlock = dayBlocks.some(block => {
+            if (!block.start_time) return true; 
+            const blockStart = block.start_time.substring(0, 5);
+            const blockEnd = block.end_time.substring(0, 5);
+            return current < blockEnd && proposedEnd > blockStart;
+          });
+
+          if (!isOverlappingAppointment && !isOverlappingBlock) {
+            slots.push(current);
+          }
+          
+          current = addMins(current, 30);
         }
-        
-        // Add 30 minutes
-        const [hours, minutes] = current.split(':').map(Number);
-        let nextMinutes = minutes + 30;
-        let nextHours = hours;
-        if (nextMinutes >= 60) {
-          nextHours++;
-          nextMinutes = 0;
-        }
-        current = `${nextHours.toString().padStart(2, '0')}:${nextMinutes.toString().padStart(2, '0')}`;
+
+        newSlotsPerDate[dateStr] = slots;
       }
 
-      setAvailableTimes(slots);
+      setSlotsPerDate(newSlotsPerDate);
     } catch (error) {
       console.error('Error calculating times:', error);
-      setAvailableTimes([]);
+      setSlotsPerDate({});
     } finally {
       setLoading(false);
     }
@@ -212,6 +247,8 @@ export default function Booking() {
   const totalPrice = selectedServices.reduce((acc, s) => acc + s.price, 0);
   const totalDuration = selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
 
+  const availableTimes = slotsPerDate[format(selectedDate, 'yyyy-MM-dd')] || [];
+
   const handleBooking = async () => {
     if (selectedServices.length === 0 || !selectedTime || !profile) return;
     setLoading(true);
@@ -219,7 +256,6 @@ export default function Booking() {
     try {
       let barberId = selectedBarber;
       if (selectedBarber === 'any') {
-        // Pick a random barber from the available ones if 'any' is selected
         const randomIndex = Math.floor(Math.random() * barbers.length);
         barberId = barbers[randomIndex]?.id;
       }
@@ -231,38 +267,67 @@ export default function Booking() {
       const unitId = searchParams.get('unit');
       const rescheduleId = searchParams.get('reschedule');
 
-      const totalDuration = selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
-      const startTimeDate = parse(selectedTime, 'HH:mm', new Date());
-      const endTimeDate = addMinutes(startTimeDate, totalDuration);
-      const endTime = format(endTimeDate, 'HH:mm');
+      // Gera um ID Único de Comanda para vincular os agendamentos
+      const comandaId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      let currentStartTimeDate = parse(selectedTime, 'HH:mm', new Date());
+      const appointmentsToInsert = [];
+      let firstAppointmentData = null;
 
-      const totalPrice = selectedServices.reduce((acc, s) => acc + s.price, 0);
+      // Cria um registro no banco SEQUENCIAL E SEPARADO para cada serviço
+      for (let i = 0; i < selectedServices.length; i++) {
+        const service = selectedServices[i];
+        
+        const startTimeStr = format(currentStartTimeDate, 'HH:mm');
+        const endTimeDate = addMinutes(currentStartTimeDate, service.duration_minutes);
+        const endTimeStr = format(endTimeDate, 'HH:mm');
 
-      const appointmentData = {
-        client_id: profile.id,
-        barber_id: barberId,
-        service_id: selectedServices[0].id,
-        unit_id: unitId,
-        date: format(selectedDate, 'yyyy-MM-dd'),
-        start_time: selectedTime,
-        end_time: endTime,
-        status: 'scheduled',
-        notes: `Serviços: ${selectedServices.map(s => s.name).join(', ')} | Total: R$ ${totalPrice.toFixed(2)}${rescheduleId ? ' (Reagendamento)' : ''}`
-      };
+        const appointmentData = {
+          client_id: profile.id,
+          barber_id: barberId,
+          service_id: service.id, // O ID do serviço fica perfeito no banco
+          unit_id: unitId,
+          date: format(selectedDate, 'yyyy-MM-dd'),
+          start_time: startTimeStr,
+          end_time: endTimeStr,
+          status: 'scheduled',
+          // Vinculamos os serviços usando a nota
+          notes: `Comanda #${comandaId}${rescheduleId ? ' (Reagendamento)' : ''}`
+        };
 
-      let result;
-      if (rescheduleId) {
-        result = await supabase
-          .from('appointments')
-          .update(appointmentData)
-          .eq('id', rescheduleId);
-      } else {
-        result = await supabase
-          .from('appointments')
-          .insert([appointmentData]);
+        if (i === 0) {
+          firstAppointmentData = appointmentData;
+        } else {
+          appointmentsToInsert.push(appointmentData);
+        }
+
+        // Avança o horário para o próximo serviço na fila
+        currentStartTimeDate = endTimeDate;
       }
 
-      if (result.error) throw result.error;
+      // Executa no Banco de Dados
+      if (rescheduleId) {
+        const { error: updateError } = await supabase
+          .from('appointments')
+          .update(firstAppointmentData)
+          .eq('id', rescheduleId);
+        if (updateError) throw updateError;
+        
+        if (appointmentsToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from('appointments')
+            .insert(appointmentsToInsert);
+          if (insertError) throw insertError;
+        }
+      } else {
+        const allAppointments = [firstAppointmentData, ...appointmentsToInsert];
+        const { error: insertError } = await supabase
+          .from('appointments')
+          .insert(allAppointments);
+          
+        if (insertError) throw insertError;
+      }
+
       setShowModal(true);
     } catch (error) {
       console.error('Error booking:', error);
@@ -271,7 +336,15 @@ export default function Booking() {
     }
   };
 
-  const dates = Array.from({ length: 14 }).map((_, i) => addDays(startOfToday(), i));
+  // Junta as datas padrões e a data escolhida pelo calendário para exibir na interface
+  const displayDates = useMemo(() => {
+    const list = [...defaultDates];
+    if (customDate && !list.some(d => format(d, 'yyyy-MM-dd') === format(customDate, 'yyyy-MM-dd'))) {
+      list.push(customDate);
+      list.sort((a, b) => a.getTime() - b.getTime()); // Ordena cronologicamente
+    }
+    return list;
+  }, [defaultDates, customDate]);
 
   return (
     <div className="mx-auto max-w-lg md:max-w-4xl lg:max-w-6xl bg-[#0a0502] min-h-screen pb-32">
@@ -453,8 +526,37 @@ export default function Booking() {
                 <section>
                   <h3 className="text-[10px] font-bold text-gold uppercase tracking-widest mb-4">Data</h3>
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 hide-scrollbar md:grid md:grid-cols-7 lg:grid-cols-14 md:overflow-visible md:mx-0 md:px-0">
-                    {dates.map(date => {
-                      const isSelected = format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+                    {displayDates.map(date => {
+                      const dateStr = format(date, 'yyyy-MM-dd');
+                      const isSelected = dateStr === format(selectedDate, 'yyyy-MM-dd');
+                      
+                      const isCalculated = slotsPerDate[dateStr] !== undefined;
+                      const slotsCount = isCalculated ? slotsPerDate[dateStr].length : -1;
+
+                      let statusColor = 'border-white/10 bg-white/5 text-zinc-400 hover:border-white/20';
+                      let statusText = '';
+
+                      if (isCalculated) {
+                        if (slotsCount === 0) {
+                          statusText = 'Lotado';
+                          statusColor = isSelected 
+                            ? 'border-red-500 bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]' 
+                            : 'border-red-500/20 bg-red-500/5 text-red-500/70 hover:border-red-500/40';
+                        } else if (slotsCount <= 5) {
+                          statusText = 'Poucos';
+                          statusColor = isSelected 
+                            ? 'border-yellow-500 bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.4)]' 
+                            : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-500/80 hover:border-yellow-500/50';
+                        } else {
+                          statusText = 'Livre';
+                          statusColor = isSelected 
+                            ? 'border-emerald-500 bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                            : 'border-emerald-500/30 bg-emerald-500/5 text-emerald-500/80 hover:border-emerald-500/50';
+                        }
+                      } else if (isSelected) {
+                        statusColor = 'border-gold bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]';
+                      }
+
                       return (
                         <button
                           key={date.toISOString()}
@@ -462,17 +564,31 @@ export default function Booking() {
                             setSelectedDate(date);
                             setSelectedTime(null);
                           }}
-                          className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-20 rounded-2xl border transition-all ${
-                            isSelected 
-                              ? 'border-gold bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)]' 
-                              : 'border-white/10 bg-white/5 text-zinc-400'
-                          }`}
+                          className={`flex-shrink-0 flex flex-col items-center justify-center w-16 h-[84px] rounded-2xl border transition-all ${statusColor}`}
                         >
                           <span className="text-[10px] uppercase font-bold opacity-80">{format(date, 'EEE', { locale: ptBR })}</span>
                           <span className="text-xl font-black mt-1">{format(date, 'dd')}</span>
+                          {isCalculated && (
+                            <span className="text-[8px] font-black uppercase mt-1 opacity-80">
+                              {statusText}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
+
+                    {/* Botão para abrir o modal de calendário */}
+                    <button 
+                      onClick={() => {
+                        setCalendarViewDate(startOfMonth(selectedDate));
+                        setIsCalendarModalOpen(true);
+                      }}
+                      className="flex-shrink-0 flex flex-col items-center justify-center w-16 h-[84px] rounded-2xl border border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-white transition-colors"
+                    >
+                      <Calendar className="h-6 w-6 mb-1 opacity-80" />
+                      <span className="text-[8px] font-black uppercase text-center leading-tight">Outras<br/>Datas</span>
+                    </button>
+
                   </div>
                 </section>
 
@@ -480,19 +596,29 @@ export default function Booking() {
                 <section>
                   <h3 className="text-[10px] font-bold text-gold uppercase tracking-widest mb-4">Horários Disponíveis</h3>
                   <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                    {availableTimes.map(time => (
-                      <button
-                        key={time}
-                        onClick={() => setSelectedTime(time)}
-                        className={`py-3 rounded-xl border text-center font-bold text-sm transition-all ${
-                          selectedTime === time 
-                            ? 'border-gold bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)]' 
-                            : 'border-white/10 bg-white/5 text-zinc-400'
-                        }`}
-                      >
-                        {time}
-                      </button>
-                    ))}
+                    {loading ? (
+                       <div className="col-span-full text-center py-6">
+                         <p className="text-zinc-500 text-sm font-medium">Calculando horários...</p>
+                       </div>
+                    ) : availableTimes.length === 0 ? (
+                      <div className="col-span-full text-center py-6">
+                        <p className="text-zinc-500 text-sm font-medium">Nenhum horário com tempo suficiente disponível.</p>
+                      </div>
+                    ) : (
+                      availableTimes.map(time => (
+                        <button
+                          key={time}
+                          onClick={() => setSelectedTime(time)}
+                          className={`py-3 rounded-xl border text-center font-bold text-sm transition-all ${
+                            selectedTime === time 
+                              ? 'border-gold bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)]' 
+                              : 'border-white/10 bg-white/5 text-zinc-400'
+                          }`}
+                        >
+                          {time}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </section>
 
@@ -562,6 +688,80 @@ export default function Booking() {
           </div>
         )}
       </div>
+
+      {/* Custom Calendar Modal */}
+      {isCalendarModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#151515] p-6 rounded-3xl max-w-sm w-full shadow-2xl ring-1 ring-white/10 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-black text-white uppercase tracking-tight">Selecionar Data</h3>
+              <button 
+                onClick={() => setIsCalendarModalOpen(false)} 
+                className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between mb-4 bg-white/5 rounded-2xl p-2">
+              <button 
+                onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))}
+                className="p-2 text-gold hover:bg-white/10 rounded-xl transition-colors"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <span className="font-bold text-white capitalize text-sm">
+                {format(calendarViewDate, 'MMMM yyyy', { locale: ptBR })}
+              </span>
+              <button 
+                onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))}
+                className="p-2 text-gold hover:bg-white/10 rounded-xl transition-colors"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
+                <div key={d} className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{d}</div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: getDay(startOfMonth(calendarViewDate)) }).map((_, i) => (
+                <div key={`empty-${i}`} className="h-10 w-full" />
+              ))}
+              
+              {eachDayOfInterval({ start: startOfMonth(calendarViewDate), end: endOfMonth(calendarViewDate) }).map(day => {
+                const maxDate = addDays(startOfToday(), 60);
+                const isDisabled = isBefore(day, startOfToday()) || isBefore(maxDate, day);
+                const isSelected = isSameDay(day, selectedDate);
+
+                return (
+                  <button
+                    key={day.toISOString()}
+                    disabled={isDisabled}
+                    onClick={() => {
+                      setCustomDate(day);
+                      setSelectedDate(day);
+                      setSelectedTime(null);
+                      setIsCalendarModalOpen(false);
+                    }}
+                    className={`
+                      h-10 w-full rounded-xl flex items-center justify-center text-sm font-bold transition-all
+                      ${isDisabled ? 'text-zinc-700 opacity-50 cursor-not-allowed' : 
+                        isSelected ? 'bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]' : 
+                        'text-zinc-300 hover:bg-white/10'}
+                    `}
+                  >
+                    {format(day, 'd')}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Success Modal */}
       {showModal && (
