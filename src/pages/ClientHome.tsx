@@ -14,6 +14,7 @@ interface Appointment {
   start_time: string;
   end_time?: string;
   notes?: string;
+  status?: string;
   service: { id: string; name: string };
   barber: { id: string; users: { name: string; avatar_url?: string | null } };
 }
@@ -133,16 +134,17 @@ export default function ClientHome() {
         }
       }
 
-      // Fetch future appointments
+      // Fetch future appointments - ocultando os cancelados
       const { data: futureData } = await supabase
         .from('appointments')
         .select(`
-          id, date, start_time, end_time, notes,
+          id, date, start_time, end_time, notes, status,
           service:services(name),
           barber:barbers(users:user_id(name, avatar_url))
         `)
         .eq('client_id', profile?.id)
         .gte('date', today)
+        .neq('status', 'cancelled') // Filtra os cancelados para não aparecerem
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 
@@ -182,22 +184,32 @@ export default function ClientHome() {
     setIsUnitModalOpen(false);
   };
 
-  const handleCancelAppointment = async (id: string) => {
-    if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+const handleCancelAppointment = async (id: string) => {
+    // Usando window.confirm para garantir compatibilidade em todos os navegadores
+    if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
     
     setCancelling(true);
     try {
-      const { error } = await supabase
+      // Tenta atualizar o banco de dados
+      const { error, data } = await supabase
         .from('appointments')
         .update({ status: 'cancelled' })
-        .eq('id', id);
+        .eq('id', id)
+        .select(); // Adicionamos select() para forçar o retorno do dado modificado
 
       if (error) throw error;
+
+      // Se passou direto mas não atualizou nada (geralmente problema de permissão/RLS)
+      if (data && data.length === 0) {
+         throw new Error("Nenhum agendamento foi alterado. Verifique as permissões (RLS) da tabela.");
+      }
       
       showNotification('Agendamento cancelado com sucesso.');
-      setSelectedAppointment(null);
-      fetchDashboardData();
+      setSelectedAppointment(null); // Fecha o modal
+      fetchDashboardData(); // Recarrega os dados sem o item cancelado
     } catch (error: any) {
+      // O alert garante que a mensagem apareça NA FRENTE do modal
+      alert('Erro ao cancelar: ' + error.message);
       showNotification(error.message, 'error');
     } finally {
       setCancelling(false);

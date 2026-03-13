@@ -18,15 +18,21 @@ export function DashboardLayout() {
     return profile?.subscription_type === 'clube' ? 'Assinante Premium 👑' : 'Cliente Comum';
   };
 
-  const navItems = [
-    { to: '/', icon: Home, label: 'Home' },
-    { 
-      to: (profile?.role === 'barber' || profile?.role === 'admin') ? '/barber' : '/booking', 
-      icon: Calendar, 
-      label: 'Agenda' 
-    },
-    { to: '/profile', icon: User, label: 'Perfil' },
-  ];
+  // Define os itens do menu dinamicamente baseado no cargo (role)
+  const navItems = profile?.role === 'admin' 
+    ? [
+        { to: '/admin', icon: Home, label: 'Home' }, // Home mostra o dashboard de Admin
+        { to: '/profile', icon: Settings, label: 'Admin' }, // Admin serve como painel de configuração
+      ]
+    : [
+        { to: '/', icon: Home, label: 'Home' },
+        { 
+          to: profile?.role === 'barber' ? '/barber' : '/booking', 
+          icon: Calendar, 
+          label: 'Agenda' 
+        },
+        { to: '/profile', icon: User, label: 'Perfil' },
+      ];
 
   return (
     <div className="min-h-screen bg-[#0a0502] text-white pb-24">
@@ -48,26 +54,6 @@ export function DashboardLayout() {
                   {item.label}
                 </Link>
               ))}
-              {(profile?.role === 'barber' || profile?.role === 'admin') && (
-                <Link
-                  to="/barber"
-                  className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:text-gold ${
-                    location.pathname === '/barber' ? 'text-gold' : 'text-zinc-500'
-                  }`}
-                >
-                  Painel
-                </Link>
-              )}
-              {profile?.role === 'admin' && (
-                <Link
-                  to="/admin"
-                  className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:text-gold ${
-                    location.pathname === '/admin' ? 'text-gold' : 'text-zinc-500'
-                  }`}
-                >
-                  Admin
-                </Link>
-              )}
             </nav>
           </div>
           
@@ -104,36 +90,21 @@ export function DashboardLayout() {
               <button onClick={() => setMenuOpen(false)} className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Fechar</button>
             </div>
             
-            <Link
-              to="/"
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center px-6 py-4 text-sm font-bold text-zinc-300 hover:bg-white/5 transition-colors"
-            >
-              <Home className="mr-4 h-5 w-5 text-gold" />
-              Área do Cliente
-            </Link>
-
-            {(profile?.role === 'barber' || profile?.role === 'admin') && (
-              <Link
-                to="/barber"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center px-6 py-4 text-sm font-bold text-zinc-300 hover:bg-white/5 transition-colors"
-              >
-                <Calendar className="mr-4 h-5 w-5 text-gold" />
-                Painel do Barbeiro
-              </Link>
-            )}
-
-            {profile?.role === 'admin' && (
-              <Link
-                to="/admin"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center px-6 py-4 text-sm font-bold text-zinc-300 hover:bg-white/5 transition-colors"
-              >
-                <Settings className="mr-4 h-5 w-5 text-gold" />
-                Painel Administrativo
-              </Link>
-            )}
+            {/* Itens do menu renderizados dinamicamente */}
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center px-6 py-4 text-sm font-bold text-zinc-300 hover:bg-white/5 transition-colors"
+                >
+                  <Icon className="mr-4 h-5 w-5 text-gold" />
+                  {item.label}
+                </Link>
+              );
+            })}
 
             <div className="border-t border-white/5 mt-2 pt-2">
               <button
