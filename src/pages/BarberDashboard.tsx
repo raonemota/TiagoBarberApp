@@ -111,6 +111,25 @@ export default function BarberDashboard() {
     isFullDay: true
   });
 
+  // Estado Centralizado para o Modal Personalizado de Confirmações
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    action: () => Promise<void>;
+    type: 'success' | 'danger';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    action: async () => {},
+    type: 'success'
+  });
+
+  const requestConfirm = (title: string, message: string, type: 'success' | 'danger', action: () => Promise<void>) => {
+    setConfirmDialog({ isOpen: true, title, message, type, action });
+  };
+
   useEffect(() => {
     if (profile) fetchBarberData();
   }, [profile, view]);
@@ -122,7 +141,6 @@ export default function BarberDashboard() {
   }, [activeTab, barberId]);
 
   useEffect(() => {
-    // Busca a lista de serviços gerais do salão
     const fetchServicesList = async () => {
       const { data } = await supabase.from('services').select('*').order('name');
       if (data) setAvailableServices(data);
@@ -141,7 +159,6 @@ export default function BarberDashboard() {
       if (!barberData) return;
       setBarberId(barberData.id);
 
-      // Usando date-fns para pegar o dia exato no fuso horário do usuário
       const todayStr = format(new Date(), 'yyyy-MM-dd');
 
       const { data: apts } = await supabase
@@ -217,7 +234,6 @@ export default function BarberDashboard() {
       const { data } = await query;
       if (data) setHistoryAppointments(data as any);
     } catch (error) {
-      console.error('Erro ao buscar histórico:', error);
       showNotification('Erro ao buscar histórico.', 'error');
     } finally {
       setLoadingHistory(false);
@@ -328,99 +344,120 @@ export default function BarberDashboard() {
     });
   };
 
-  // Funções de Gestão de Agendamentos
-  const handleCompleteGroup = async (group: Appointment[]) => {
+  // ==========================================
+  // FUNÇÕES DE GESTÃO DA COMANDA (COM MODAL)
+  // ==========================================
+
+  const handleCompleteGroup = (group: Appointment[]) => {
     const pendingIds = group.filter(a => a.status !== 'completed' && a.status !== 'cancelled').map(a => a.id);
     if (pendingIds.length === 0) return;
-    try {
-      await Promise.all(pendingIds.map(id => supabase.from('appointments').update({ status: 'completed' }).eq('id', id)));
-      showNotification('Comanda finalizada!', 'success');
-      fetchBarberData();
-      if (activeTab === 'historico') fetchHistory();
-    } catch (error) {
-      showNotification('Erro ao finalizar comanda.', 'error');
-    }
+
+    requestConfirm(
+      'Finalizar Comanda', 
+      'Deseja finalizar todos os serviços pendentes desta comanda?', 
+      'success', 
+      async () => {
+        const { error } = await supabase.from('appointments').update({ status: 'completed' }).in('id', pendingIds);
+        if (error) throw error;
+        
+        showNotification('Comanda finalizada!', 'success');
+        fetchBarberData();
+        if (activeTab === 'historico') fetchHistory();
+      }
+    );
   };
 
-  const handleCancelGroup = async (group: Appointment[]) => {
-    if (!window.confirm('Tem certeza que deseja cancelar todos os serviços desta comanda?')) return;
+  const handleCancelGroup = (group: Appointment[]) => {
     const pendingIds = group.filter(a => a.status !== 'cancelled').map(a => a.id);
     if (pendingIds.length === 0) return;
-    try {
-      await Promise.all(pendingIds.map(id => supabase.from('appointments').update({ status: 'cancelled' }).eq('id', id)));
-      showNotification('Comanda cancelada.', 'success');
-      fetchBarberData();
-      if (activeTab === 'historico') fetchHistory();
-    } catch (error) {
-      showNotification('Erro ao cancelar.', 'error');
-    }
+
+    requestConfirm(
+      'Cancelar Comanda', 
+      'Tem certeza que deseja cancelar todos os serviços desta comanda?', 
+      'danger', 
+      async () => {
+        const { error } = await supabase.from('appointments').update({ status: 'cancelled' }).in('id', pendingIds);
+        if (error) throw error;
+        
+        showNotification('Comanda cancelada.', 'success');
+        fetchBarberData();
+        if (activeTab === 'historico') fetchHistory();
+      }
+    );
   };
 
-  const handleDeleteGroup = async (group: Appointment[]) => {
-    if (!window.confirm('Tem certeza que deseja excluir permanentemente estes agendamentos do sistema?')) return;
-    try {
-      await Promise.all(group.map(a => supabase.from('appointments').delete().eq('id', a.id)));
-      showNotification('Agendamentos excluídos.', 'success');
-      fetchBarberData();
-      if (activeTab === 'historico') fetchHistory();
-    } catch (error) {
-      showNotification('Erro ao excluir agendamentos.', 'error');
-    }
+  const handleDeleteGroup = (group: Appointment[]) => {
+    requestConfirm(
+      'Excluir Comanda', 
+      'Esta ação é permanente. Deseja excluir todos os registros desta comanda do sistema?', 
+      'danger', 
+      async () => {
+        const ids = group.map(a => a.id);
+        const { error } = await supabase.from('appointments').delete().in('id', ids);
+        if (error) throw error;
+
+        showNotification('Agendamentos excluídos.', 'success');
+        fetchBarberData();
+        if (activeTab === 'historico') fetchHistory();
+      }
+    );
   };
 
-  const handleCompleteSingle = async (id: string) => {
-    try {
-      await supabase.from('appointments').update({ status: 'completed' }).eq('id', id);
-      showNotification('Serviço finalizado!', 'success');
-      fetchBarberData();
-      if (activeTab === 'historico') fetchHistory();
-    } catch (error) {
-      showNotification('Erro ao finalizar.', 'error');
-    }
+  const handleCompleteSingle = (id: string) => {
+    requestConfirm(
+      'Finalizar Serviço', 
+      'Deseja marcar este serviço específico como concluído?', 
+      'success', 
+      async () => {
+        const { error } = await supabase.from('appointments').update({ status: 'completed' }).eq('id', id);
+        if (error) throw error;
+
+        showNotification('Serviço finalizado!', 'success');
+        fetchBarberData();
+        if (activeTab === 'historico') fetchHistory();
+      }
+    );
   };
 
-  const handleCancelSingle = async (id: string) => {
-    if (!window.confirm('Cancelar este serviço individualmente?')) return;
-    try {
-      await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', id);
-      showNotification('Serviço cancelado.', 'success');
-      fetchBarberData();
-      if (activeTab === 'historico') fetchHistory();
-    } catch (error) {
-      showNotification('Erro ao cancelar.', 'error');
-    }
+  const handleCancelSingle = (id: string) => {
+    requestConfirm(
+      'Cancelar Serviço', 
+      'Deseja cancelar este serviço específico?', 
+      'danger', 
+      async () => {
+        const { error } = await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', id);
+        if (error) throw error;
+
+        showNotification('Serviço cancelado.', 'success');
+        fetchBarberData();
+        if (activeTab === 'historico') fetchHistory();
+      }
+    );
   };
 
-  // Função para adicionar serviço à comanda existente
   const handleAddNewServiceToGroup = async (service: any) => {
     if (!addingServiceToGroup || !barberId) return;
     setSaving(true);
     
     try {
       const firstApt = addingServiceToGroup[0];
-      
-      if (!firstApt.client_id) {
-         throw new Error("Não foi possível identificar o cliente da comanda.");
-      }
+      if (!firstApt.client_id) throw new Error("Não foi possível identificar o cliente.");
 
-      // Encontra o último serviço ativo para saber de onde continuar o relógio
       const activeApts = addingServiceToGroup.filter(a => a.status !== 'cancelled');
       const referenceApt = activeApts.length > 0 ? activeApts[activeApts.length - 1] : addingServiceToGroup[addingServiceToGroup.length - 1];
 
       let newStartTime = referenceApt.end_time;
       if (!newStartTime) {
         const start = parse(referenceApt.start_time.substring(0, 5), 'HH:mm', new Date());
-        newStartTime = format(addMinutes(start, 30), 'HH:mm'); // fallback
+        newStartTime = format(addMinutes(start, 30), 'HH:mm');
       } else {
         newStartTime = newStartTime.substring(0, 5);
       }
 
-      // Calcula a duração do novo serviço
       const newStartTimeDate = parse(newStartTime, 'HH:mm', new Date());
       const newEndTimeDate = addMinutes(newStartTimeDate, service.duration_minutes);
       const newEndTime = format(newEndTimeDate, 'HH:mm');
 
-      // Tenta pegar a Hash da Comanda nas notas
       let notesText = 'Serviço Adicionado (Comanda)';
       if (firstApt.notes && firstApt.notes.includes('Comanda #')) {
         const match = firstApt.notes.match(/Comanda #[A-Z0-9]+/);
@@ -438,34 +475,26 @@ export default function BarberDashboard() {
         notes: notesText
       };
 
-      if (firstApt.unit_id) {
-         payload.unit_id = firstApt.unit_id;
-      }
+      if (firstApt.unit_id) payload.unit_id = firstApt.unit_id;
 
-      // O erro do Supabase não lança excessão sozinho, tem que verificar e jogar o erro
       const { error } = await supabase.from('appointments').insert([payload]);
       if (error) throw error;
 
-      showNotification(`Serviço "${service.name}" adicionado à comanda!`, 'success');
-      
+      showNotification(`Serviço "${service.name}" adicionado!`, 'success');
       setAddingServiceToGroup(null);
       
-      // Atualiza a tela certa onde o barbeiro está
       if (activeTab === 'historico') {
         fetchHistory();
       } else {
         fetchBarberData();
       }
-
     } catch (error: any) {
-      console.error(error);
-      showNotification(error.message || 'Erro ao adicionar serviço.', 'error');
+      showNotification(error.message || 'Erro ao adicionar.', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  // Prepara os dados agrupados
   const groupedAgenda = useMemo(() => groupAppointmentsByClientAndDate(appointments), [appointments]);
   const groupedHistoryData = useMemo(() => groupAppointmentsByClientAndDate(historyAppointments), [historyAppointments]);
 
@@ -479,51 +508,49 @@ export default function BarberDashboard() {
     const displayDate = firstValidApt.date;
     
     const allCancelled = group.every(a => a.status === 'cancelled');
-    const allCompleted = group.every(a => a.status === 'completed');
-    const someCompleted = group.some(a => a.status === 'completed');
+    const allCompleted = activeApts.length > 0 && activeApts.every(a => a.status === 'completed');
+    const someCompleted = activeApts.some(a => a.status === 'completed') && !allCompleted;
 
-    // Soma APENAS os minutos dos serviços que NÃO estão cancelados
     const totalDuration = group.reduce((acc, apt) => {
       if (apt.status === 'cancelled') return acc;
-      
       if (apt.end_time) {
         const start = parse(apt.start_time.substring(0, 5), 'HH:mm', new Date());
         const end = parse(apt.end_time.substring(0, 5), 'HH:mm', new Date());
         return acc + differenceInMinutes(end, start);
       }
-      return acc + 30; // fallback
+      return acc + 30;
     }, 0);
 
     const totalPrice = group.reduce((sum, apt) => apt.status !== 'cancelled' ? sum + (apt.service?.price || 0) : sum, 0);
 
     let overallStatus = 'Agendado';
     let statusColor = 'bg-[#8162ff]/10 text-[#8162ff]';
-    if (allCancelled) {
-      overallStatus = 'Cancelado';
-      statusColor = 'bg-red-500/10 text-red-500';
-    } else if (allCompleted) {
-      overallStatus = 'Concluído';
-      statusColor = 'bg-green-500/10 text-green-500';
-    } else if (someCompleted) {
-      overallStatus = 'Em Andamento';
-      statusColor = 'bg-yellow-500/10 text-yellow-500';
+    if (allCancelled) { 
+      overallStatus = 'Cancelado'; 
+      statusColor = 'bg-red-500/10 text-red-500'; 
+    } else if (allCompleted) { 
+      overallStatus = 'FINALIZADO'; 
+      statusColor = 'bg-green-500/10 text-green-500'; 
+    } else if (someCompleted) { 
+      overallStatus = 'Em Andamento'; 
+      statusColor = 'bg-yellow-500/10 text-yellow-500'; 
     }
 
     return (
-      <div className={`p-4 sm:px-6 flex flex-col sm:flex-row justify-between gap-6 transition-colors ${allCancelled ? 'bg-red-500/5 hover:bg-red-500/10 opacity-75' : 'hover:bg-[#262626]/50'}`}>
-        <div className="flex items-start gap-4">
+      <div className={`p-4 sm:px-6 flex flex-col sm:flex-row justify-between gap-6 transition-all rounded-2xl border border-[#262626] ${allCancelled ? 'bg-red-500/5 hover:bg-red-500/10 opacity-75' : 'bg-[#1a1a1a] hover:bg-[#262626]/50 shadow-sm'}`}>
+        <div className="flex items-start gap-4 w-full sm:w-auto">
           
           <div className="flex flex-col items-center gap-2 shrink-0 mt-1">
             <div className={`flex flex-col items-center justify-center w-16 h-16 sm:w-18 sm:h-18 rounded-2xl text-white ring-1 ${allCancelled ? 'bg-red-950/30 ring-red-900' : 'bg-[#262626] ring-[#333]'}`}>
               <span className="text-[10px] font-bold uppercase opacity-60">{format(parseISO(displayDate), 'MMM', { locale: ptBR })}</span>
               <span className="text-xl font-black">{format(parseISO(displayDate), 'dd')}</span>
             </div>
-            <div className={`text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg shadow-sm ${allCancelled ? 'bg-red-950/30 text-red-500' : 'bg-[#1a1a1a] ring-1 ring-[#333] text-zinc-200'}`}>
+            <div className={`text-xs sm:text-sm font-black px-2.5 py-1 rounded-lg shadow-sm ${allCancelled ? 'bg-red-950/30 text-red-500' : 'bg-[#222] ring-1 ring-[#333] text-zinc-200'}`}>
               {startTime}
             </div>
           </div>
 
-          <div className="flex flex-col">
+          <div className="flex flex-col flex-1">
             <h3 className={`font-bold text-lg ${allCancelled ? 'text-zinc-400 line-through' : 'text-white'}`}>{clientName}</h3>
             
             <div className="mt-2 space-y-1">
@@ -545,10 +572,10 @@ export default function BarberDashboard() {
                   {!isHistory && !allCancelled && !allCompleted && apt.status === 'scheduled' && (
                     <div className="opacity-0 group-hover/item:opacity-100 flex items-center gap-2 ml-2 transition-opacity">
                       <button onClick={() => handleCompleteSingle(apt.id)} className="p-1 rounded bg-zinc-800 text-zinc-500 hover:text-green-500 hover:bg-green-500/10 transition-colors" title="Finalizar este serviço">
-                        <CheckCircle2 className="h-3 w-3" />
+                        <CheckCircle2 className="h-4 w-4" />
                       </button>
                       <button onClick={() => handleCancelSingle(apt.id)} className="p-1 rounded bg-zinc-800 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-colors" title="Cancelar este serviço">
-                        <XCircle className="h-3 w-3" />
+                        <XCircle className="h-4 w-4" />
                       </button>
                     </div>
                   )}
@@ -563,7 +590,7 @@ export default function BarberDashboard() {
         </div>
         
         <div className="flex flex-col items-start sm:items-end justify-between border-t border-[#262626] sm:border-t-0 pt-4 sm:pt-0 gap-3">
-          <span className={`px-3 py-1 text-[10px] font-bold uppercase rounded-full self-start sm:self-end ${statusColor}`}>
+          <span className={`px-3 py-1 text-[10px] font-bold uppercase rounded-full self-start sm:self-end tracking-wider ${statusColor}`}>
             {overallStatus}
           </span>
           
@@ -684,8 +711,8 @@ export default function BarberDashboard() {
       </div>
 
       {activeTab === 'agenda' && (
-        <div className="rounded-2xl bg-[#1a1a1a] shadow-sm ring-1 ring-[#262626] overflow-hidden">
-          <div className="border-b border-[#262626] p-4 sm:px-6 flex flex-col sm:flex-row gap-4 sm:items-center justify-between bg-[#1a1a1a]">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-[#1a1a1a] p-4 sm:px-6 flex flex-col sm:flex-row gap-4 sm:items-center justify-between ring-1 ring-[#262626]">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Calendar className="h-5 w-5 text-[#8162ff]" /> Comandas Abertas
             </h2>
@@ -701,9 +728,9 @@ export default function BarberDashboard() {
               ))}
             </div>
           </div>
-          <div className="divide-y divide-[#262626]">
+          <div className="flex flex-col gap-4">
             {groupedAgenda.length === 0 ? (
-              <div className="p-12 text-center text-zinc-500">Nenhum agendamento encontrado para hoje.</div>
+              <div className="p-12 text-center text-zinc-500 rounded-2xl bg-[#1a1a1a] ring-1 ring-[#262626]">Nenhum agendamento encontrado para hoje.</div>
             ) : (
               groupedAgenda.map((group) => <GroupedAppointmentRow key={group[0].id} group={group} isHistory={false} />)
             )}
@@ -712,8 +739,8 @@ export default function BarberDashboard() {
       )}
 
       {activeTab === 'historico' && (
-        <div className="rounded-2xl bg-[#1a1a1a] shadow-sm ring-1 ring-[#262626] overflow-hidden">
-          <div className="p-4 sm:px-6 border-b border-[#262626] bg-[#1a1a1a] flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-[#1a1a1a] p-4 sm:px-6 flex flex-col lg:flex-row gap-4 lg:items-center justify-between ring-1 ring-[#262626]">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <History className="h-5 w-5 text-[#8162ff]" /> Histórico de Comandas
             </h2>
@@ -743,14 +770,14 @@ export default function BarberDashboard() {
               </button>
             </div>
           </div>
-          <div className="divide-y divide-[#262626]">
+          <div className="flex flex-col gap-4">
             {loadingHistory ? (
-              <div className="p-12 text-center text-zinc-500 flex flex-col items-center justify-center gap-3">
+              <div className="p-12 text-center text-zinc-500 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[#1a1a1a] ring-1 ring-[#262626]">
                 <Loader2 className="h-6 w-6 animate-spin text-[#8162ff]" />
                 Buscando histórico...
               </div>
             ) : groupedHistoryData.length === 0 ? (
-              <div className="p-12 text-center text-zinc-500">Nenhum agendamento encontrado para o período.</div>
+              <div className="p-12 text-center text-zinc-500 rounded-2xl bg-[#1a1a1a] ring-1 ring-[#262626]">Nenhum agendamento encontrado para o período.</div>
             ) : (
               groupedHistoryData.map((group) => <GroupedAppointmentRow key={group[0].id} group={group} isHistory={true} />)
             )}
@@ -843,7 +870,7 @@ export default function BarberDashboard() {
 
       {/* Modal Adicionar Serviço à Comanda */}
       {addingServiceToGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-md p-8 shadow-2xl ring-1 ring-[#262626] max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between mb-6 shrink-0">
               <div className="flex items-center gap-3">
@@ -875,43 +902,49 @@ export default function BarberDashboard() {
         </div>
       )}
 
-      {/* Modal Novo Cliente */}
-      {isClientModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-md p-8 shadow-2xl ring-1 ring-[#262626]">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#8162ff] text-white rounded-xl"><UserPlus className="h-6 w-6" /></div>
-                <h3 className="text-2xl font-bold text-white tracking-tighter">Novo Cliente</h3>
+      {/* Modal Genérico de Confirmação */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-sm p-6 shadow-2xl ring-1 ring-[#262626] animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className={`p-4 rounded-full ${confirmDialog.type === 'danger' ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>
+                {confirmDialog.type === 'danger' ? <XCircle className="h-8 w-8" /> : <CheckCircle2 className="h-8 w-8" />}
               </div>
-              <button onClick={() => setIsClientModalOpen(false)} className="p-2 text-zinc-500 hover:text-white transition-colors"><X className="h-6 w-6" /></button>
+              <div>
+                <h3 className="text-xl font-bold text-white tracking-tighter">{confirmDialog.title}</h3>
+                <p className="text-sm text-zinc-400 mt-2">{confirmDialog.message}</p>
+              </div>
+              <div className="flex w-full gap-3 mt-4">
+                <button 
+                  onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                  className="flex-1 py-3 rounded-xl font-bold text-zinc-400 bg-[#262626] hover:bg-[#333] transition-colors"
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      await confirmDialog.action();
+                      setConfirmDialog({ ...confirmDialog, isOpen: false });
+                    } catch (err: any) {
+                      showNotification(err.message || 'Erro ao processar', 'error');
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className={`flex-1 py-3 rounded-xl font-bold text-white transition-colors flex justify-center items-center ${confirmDialog.type === 'danger' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmar'}
+                </button>
+              </div>
             </div>
-            
-            <form onSubmit={handleCreateClient} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Nome Completo</label>
-                <input required type="text" placeholder="Ex: João Silva" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white focus:ring-2 focus:ring-[#8162ff] outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Email</label>
-                <input required type="email" placeholder="joao@email.com" value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)} className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white focus:ring-2 focus:ring-[#8162ff] outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Telefone</label>
-                <input required type="text" placeholder="(11) 99999-9999" value={newClientPhone} onChange={(e) => setNewClientPhone(maskPhone(e.target.value))} className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white focus:ring-2 focus:ring-[#8162ff] outline-none" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Senha Temporária</label>
-                <input required type="password" placeholder="••••••••" value={newClientPassword} onChange={(e) => setNewClientPassword(e.target.value)} className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white focus:ring-2 focus:ring-[#8162ff] outline-none" />
-              </div>
-              <button type="submit" disabled={saving} className="w-full py-4 bg-[#8162ff] text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-[#6e4ff0] disabled:opacity-50 shadow-lg shadow-[#8162ff]/20 transition-all">
-                {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-                Cadastrar Cliente
-              </button>
-            </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }
