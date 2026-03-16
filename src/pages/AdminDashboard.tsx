@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { supabase } from '../lib/supabase';
 import ImageCropper from '../components/ImageCropper';
 import { useNotification } from '../contexts/NotificationContext';
@@ -6,7 +7,7 @@ import {
   Users, Scissors, Package, Settings, X, Plus, Loader2, 
   Mail, Phone, Shield, UserCheck, Search, ChevronDown,
   Trash2, Edit3, DollarSign, Clock, Briefcase, UserPlus,
-  MapPin
+  MapPin, ExternalLink
 } from 'lucide-react';
 
 interface UserList {
@@ -25,6 +26,14 @@ interface Unit {
   google_maps_link: string;
 }
 
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+}
+
 const maskPhone = (value: string) => {
   return value
     .replace(/\D/g, "")
@@ -40,9 +49,12 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ users: 0, barbers: 0, services: 0, products: 0, units: 0 });
   const [allUsers, setAllUsers] = useState<UserList[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [barbersList, setBarbersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [adminSearch, setAdminSearch] = useState('');
+  const [barberSearch, setBarberSearch] = useState('');
   
   // Modal states
   const [isBarberModalOpen, setIsBarberModalOpen] = useState(false);
@@ -50,14 +62,16 @@ export default function AdminDashboard() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isUserEditModalOpen, setIsUserEditModalOpen] = useState(false);
   const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   // Cropper states
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-  const [cropType, setCropType] = useState<'barber' | 'user' | null>(null);
+  const [cropType, setCropType] = useState<'barber' | 'user' | 'product' | null>(null);
 
   // Form states
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -87,6 +101,12 @@ export default function AdminDashboard() {
   const [unitName, setUnitName] = useState('');
   const [unitAddress, setUnitAddress] = useState('');
   const [unitMapsLink, setUnitMapsLink] = useState('');
+
+  const [productName, setProductName] = useState('');
+  const [productDescription, setProductDescription] = useState('');
+  const [productPrice, setProductPrice] = useState('');
+  const [productAvatar, setProductAvatar] = useState<File | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAdminData();
@@ -127,6 +147,14 @@ export default function AdminDashboard() {
       
       if (unitsData) setUnits(unitsData);
 
+      // Fetch products
+      const { data: productsData } = await supabase
+        .from('products')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (productsData) setProducts(productsData);
+
       // Fetch barbers with unit info
       const { data: barbersListData } = await supabase
         .from('barbers')
@@ -141,7 +169,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'barber' | 'user') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'barber' | 'user' | 'product') => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -159,6 +187,8 @@ export default function AdminDashboard() {
       setBarberAvatar(file);
     } else if (cropType === 'user') {
       setEditAvatar(file);
+    } else if (cropType === 'product') {
+      setProductAvatar(file);
     }
     setImageToCrop(null);
     setCropType(null);
@@ -493,22 +523,110 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      let imageUrl = '';
+
+      if (productAvatar) {
+        setUploading(true);
+        const fileExt = productAvatar.name.split('.').pop();
+        const fileName = `product-${Math.random()}.${fileExt}`;
+        const filePath = fileName;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars') // Using avatars bucket for simplicity, or create 'products' if needed
+          .upload(filePath, productAvatar);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+          
+        imageUrl = publicUrl;
+      }
+
+      const price = parseFloat(productPrice);
+      if (isNaN(price)) throw new Error('Preço inválido.');
+
+      if (editingProductId) {
+        const { error } = await supabase
+          .from('products')
+          .update({
+            name: productName,
+            description: productDescription,
+            price: price,
+            image_url: imageUrl || undefined
+          })
+          .eq('id', editingProductId);
+
+        if (error) throw error;
+        showNotification('Produto atualizado com sucesso!');
+      } else {
+        const { error } = await supabase
+          .from('products')
+          .insert({
+            name: productName,
+            description: productDescription,
+            price: price,
+            image_url: imageUrl
+          });
+
+        if (error) throw error;
+        showNotification('Produto cadastrado com sucesso!');
+      }
+
+      setIsProductModalOpen(false);
+      setProductName('');
+      setProductDescription('');
+      setProductPrice('');
+      setProductAvatar(null);
+      setEditingProductId(null);
+      fetchAdminData();
+    } catch (error: any) {
+      console.error('Error creating/updating product:', error);
+      showNotification(error.message, 'error');
+    } finally {
+      setSubmitting(false);
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+    
+    try {
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
+      fetchAdminData();
+      showNotification('Produto excluído com sucesso!');
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      showNotification(error.message, 'error');
+    }
+  };
+
   const filteredClients = allUsers.filter(u => 
     u.role === 'client' && (
-      (u.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-      (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+      (u.name?.toLowerCase() || '').includes(clientSearch.toLowerCase()) || 
+      (u.email?.toLowerCase() || '').includes(clientSearch.toLowerCase())
     )
   );
 
   const filteredAdmins = allUsers.filter(u => 
     u.role === 'admin' && (
-      (u.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-      (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+      (u.name?.toLowerCase() || '').includes(adminSearch.toLowerCase()) || 
+      (u.email?.toLowerCase() || '').includes(adminSearch.toLowerCase())
     )
   );
 
   const combinedBarbers = allUsers
-    .filter(u => u.role === 'barber')
+    .filter(u => u.role === 'barber' && (
+      (u.name?.toLowerCase() || '').includes(barberSearch.toLowerCase()) || 
+      (u.email?.toLowerCase() || '').includes(barberSearch.toLowerCase())
+    ))
     .map(u => {
       const barberData = barbersList.find(b => b.user_id === u.id);
       return {
@@ -534,36 +652,70 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold tracking-tighter text-white">Administração</h1>
           <p className="text-zinc-500">Gerencie clientes, profissionais e serviços da sua barbearia.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="relative">
           <button 
-            onClick={() => setIsUnitModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-[#1a1a1a] px-3 py-2 text-xs font-bold text-white shadow-sm ring-1 ring-[#262626] hover:bg-[#262626] transition-colors"
+            onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
+            className="flex items-center gap-2 rounded-xl bg-[#8162ff] px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-[#6e4ff0] transition-all active:scale-95"
           >
-            <MapPin className="h-5 w-5 text-[#8162ff]" /> Nova Unidade
+            <Plus className={`h-5 w-5 transition-transform duration-300 ${isAddMenuOpen ? 'rotate-45' : ''}`} />
+            Novo Cadastro
+            <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isAddMenuOpen ? 'rotate-180' : ''}`} />
           </button>
-          <button 
-            onClick={() => setIsUserModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-[#1a1a1a] px-3 py-2 text-xs font-bold text-white shadow-sm ring-1 ring-[#262626] hover:bg-[#262626] transition-colors"
-          >
-            <Plus className="h-5 w-5 text-[#8162ff]" /> Novo Cliente
-          </button>
-          <button 
-            onClick={() => setIsServiceModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-[#1a1a1a] px-3 py-2 text-xs font-bold text-white shadow-sm ring-1 ring-[#262626] hover:bg-[#262626] transition-colors"
-          >
-            <Plus className="h-5 w-5 text-[#8162ff]" /> Novo Serviço
-          </button>
-          <button 
-            onClick={() => setIsBarberModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-[#8162ff] px-3 py-2 text-xs font-bold text-white shadow-lg hover:bg-[#6e4ff0] transition-colors"
-          >
-            <UserCheck className="h-5 w-5" /> Novo Barbeiro
-          </button>
+
+          {isAddMenuOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsAddMenuOpen(false)}
+              />
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-[#1a1a1a] p-2 shadow-2xl ring-1 ring-[#262626] z-50 animate-in fade-in zoom-in duration-200 origin-top-right">
+                <button 
+                  onClick={() => { setIsUnitModalOpen(true); setIsAddMenuOpen(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-zinc-400 hover:bg-[#262626] hover:text-white transition-colors"
+                >
+                  <MapPin className="h-4 w-4 text-[#8162ff]" /> Nova Unidade
+                </button>
+                <button 
+                  onClick={() => { setIsUserModalOpen(true); setIsAddMenuOpen(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-zinc-400 hover:bg-[#262626] hover:text-white transition-colors"
+                >
+                  <UserPlus className="h-4 w-4 text-[#8162ff]" /> Novo Cliente
+                </button>
+                <button 
+                  onClick={() => { setIsServiceModalOpen(true); setIsAddMenuOpen(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-zinc-400 hover:bg-[#262626] hover:text-white transition-colors"
+                >
+                  <Scissors className="h-4 w-4 text-[#8162ff]" /> Novo Serviço
+                </button>
+                <button 
+                  onClick={() => { 
+                    setEditingProductId(null);
+                    setProductName('');
+                    setProductDescription('');
+                    setProductPrice('');
+                    setProductAvatar(null);
+                    setIsProductModalOpen(true); 
+                    setIsAddMenuOpen(false); 
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-zinc-400 hover:bg-[#262626] hover:text-white transition-colors"
+                >
+                  <Package className="h-4 w-4 text-[#8162ff]" /> Novo Produto
+                </button>
+                <div className="my-1 h-px bg-[#262626]" />
+                <button 
+                  onClick={() => { setIsBarberModalOpen(true); setIsAddMenuOpen(false); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-white bg-[#8162ff]/10 hover:bg-[#8162ff]/20 transition-colors"
+                >
+                  <UserCheck className="h-4 w-4 text-[#8162ff]" /> Novo Barbeiro
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
         {[
           { name: 'Clientes', value: stats.users, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/10' },
           { name: 'Barbeiros', value: stats.barbers, icon: Briefcase, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
@@ -571,21 +723,25 @@ export default function AdminDashboard() {
           { name: 'Produtos', value: stats.products, icon: Package, color: 'text-amber-400', bg: 'bg-amber-500/10' },
           { name: 'Unidades', value: stats.units, icon: MapPin, color: 'text-purple-400', bg: 'bg-purple-500/10' },
         ].map((card) => (
-          <div key={card.name} className="relative overflow-hidden rounded-2xl bg-[#1a1a1a] p-6 shadow-sm ring-1 ring-[#262626]">
-            <div className={`inline-flex rounded-xl p-3 ${card.bg} ${card.color} mb-4`}>
-              <card.icon className="h-6 w-6" />
+          <div key={card.name} className="relative overflow-hidden rounded-lg bg-[#1a1a1a] p-3 shadow-sm ring-1 ring-[#262626]">
+            <div className="flex items-center gap-2">
+              <div className={`inline-flex rounded-md p-1.5 ${card.bg} ${card.color}`}>
+                <card.icon className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 leading-none">{card.name}</p>
+                <p className="mt-0.5 text-lg font-bold text-white leading-none">{card.value}</p>
+              </div>
             </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">{card.name}</p>
-            <p className="mt-1 text-3xl font-bold text-white">{card.value}</p>
           </div>
         ))}
       </div>
 
       {/* Users Management Section */}
       <div className="rounded-3xl bg-[#1a1a1a] shadow-sm ring-1 ring-[#262626] overflow-hidden">
-        <div className="border-b border-[#262626] p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+        <div className="border-b border-[#262626] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Users className="h-5 w-5 text-[#8162ff]" />
               Gestão de Clientes
             </h2>
@@ -593,10 +749,10 @@ export default function AdminDashboard() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input 
                 type="text" 
-                placeholder="Buscar por nome ou email..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-xl border-none bg-[#262626] pl-10 text-sm text-white placeholder-zinc-500 focus:ring-2 focus:ring-[#8162ff]"
+                placeholder="Buscar cliente..." 
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
+                className="w-full rounded-xl border-none bg-[#262626] py-2 pl-10 text-sm text-white placeholder-zinc-500 focus:ring-2 focus:ring-[#8162ff]"
               />
             </div>
           </div>
@@ -674,11 +830,23 @@ export default function AdminDashboard() {
       {/* Admins Management Section */}
       {filteredAdmins.length > 0 && (
         <div className="rounded-3xl bg-[#1a1a1a] shadow-sm ring-1 ring-[#262626] overflow-hidden">
-          <div className="border-b border-[#262626] p-6">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Shield className="h-5 w-5 text-purple-500" />
-              Gestão de Administradores
-            </h2>
+          <div className="border-b border-[#262626] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Shield className="h-5 w-5 text-purple-500" />
+                Gestão de Administradores
+              </h2>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar admin..." 
+                  value={adminSearch}
+                  onChange={(e) => setAdminSearch(e.target.value)}
+                  className="w-full rounded-xl border-none bg-[#262626] py-2 pl-10 text-sm text-white placeholder-zinc-500 focus:ring-2 focus:ring-[#8162ff]"
+                />
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -727,11 +895,23 @@ export default function AdminDashboard() {
 
       {/* Barbers Management Section */}
       <div className="rounded-3xl bg-[#1a1a1a] shadow-sm ring-1 ring-[#262626] overflow-hidden">
-        <div className="border-b border-[#262626] p-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-[#8162ff]" />
-            Gestão de Barbeiros
-          </h2>
+        <div className="border-b border-[#262626] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-[#8162ff]" />
+              Gestão de Barbeiros
+            </h2>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input 
+                type="text" 
+                placeholder="Buscar barbeiro..." 
+                value={barberSearch}
+                onChange={(e) => setBarberSearch(e.target.value)}
+                className="w-full rounded-xl border-none bg-[#262626] py-2 pl-10 text-sm text-white placeholder-zinc-500 focus:ring-2 focus:ring-[#8162ff]"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -834,10 +1014,82 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Products Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Package className="h-5 w-5 text-[#8162ff]" /> Produtos Principais
+          </h2>
+          <Link 
+            to="/admin/products"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#262626] text-zinc-400 hover:text-white hover:bg-[#333] transition-all text-[10px] font-bold uppercase tracking-wider"
+          >
+            Ver todos os produtos
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {products.slice(0, 5).map((product) => (
+            <div key={product.id} className="bg-[#1a1a1a] rounded-xl overflow-hidden ring-1 ring-[#262626] hover:ring-[#333] transition-all group">
+              <div className="aspect-[4/3] relative overflow-hidden bg-[#262626]">
+                {product.image_url ? (
+                  <img 
+                    src={product.image_url} 
+                    alt={product.name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-700">
+                    <Package className="h-8 w-8" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 gap-1.5">
+                  <button 
+                    onClick={() => {
+                      setEditingProductId(product.id);
+                      setProductName(product.name);
+                      setProductDescription(product.description || '');
+                      setProductPrice(product.price.toString());
+                      setIsProductModalOpen(true);
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-white/10 backdrop-blur-md text-white text-[10px] font-bold hover:bg-white/20 transition-colors"
+                  >
+                    Editar
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteProduct(product.id)}
+                    className="p-1.5 rounded-lg bg-red-500/20 backdrop-blur-md text-red-500 hover:bg-red-500/30 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-3">
+                <div className="flex flex-col mb-1">
+                  <h3 className="font-bold text-white text-xs truncate">{product.name}</h3>
+                  <span className="text-[#8162ff] font-black text-xs">
+                    R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-zinc-500 text-[9px] line-clamp-1 leading-tight">{product.description}</p>
+              </div>
+            </div>
+          ))}
+          {products.length === 0 && (
+            <div className="col-span-full py-12 text-center bg-[#1a1a1a] rounded-2xl ring-1 ring-dashed ring-[#262626]">
+              <Package className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
+              <p className="text-zinc-500">Nenhum produto cadastrado.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Units Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MapPin className="h-5 w-5 text-[#8162ff]" /> Unidades
           </h2>
         </div>
@@ -1358,6 +1610,91 @@ export default function AdminDashboard() {
               >
                 {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
                 Cadastrar Unidade
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cadastrar Produto */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in fade-in zoom-in duration-300 ring-1 ring-[#262626]">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-[#8162ff] text-white rounded-xl">
+                  <Package className="h-6 w-6" />
+                </div>
+                <h3 className="text-2xl font-bold text-white tracking-tighter">
+                  {editingProductId ? 'Editar Produto' : 'Novo Produto'}
+                </h3>
+              </div>
+              <button onClick={() => setIsProductModalOpen(false)} className="p-2 text-zinc-500 hover:text-white hover:bg-[#262626] rounded-full transition-colors">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateProduct} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                  <Edit3 className="h-4 w-4" /> Nome do Produto
+                </label>
+                <input 
+                  required
+                  type="text"
+                  placeholder="Ex: Pomada Modeladora"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                  <Package className="h-4 w-4" /> Descrição
+                </label>
+                <textarea 
+                  placeholder="Descreva o produto..."
+                  value={productDescription}
+                  onChange={(e) => setProductDescription(e.target.value)}
+                  className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] min-h-[100px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" /> Preço (R$)
+                </label>
+                <input 
+                  required
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={productPrice}
+                  onChange={(e) => setProductPrice(e.target.value)}
+                  className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                  <Settings className="h-4 w-4" /> Imagem do Produto
+                </label>
+                <input 
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileChange(e, 'product')}
+                  className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#8162ff] file:text-white hover:file:bg-[#6e4ff0]"
+                />
+              </div>
+
+              <button 
+                type="submit"
+                disabled={submitting || uploading}
+                className="w-full py-4 bg-[#8162ff] text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-[#6e4ff0] disabled:opacity-50 shadow-lg shadow-[#8162ff]/20 transition-all active:scale-[0.98]"
+              >
+                {submitting || uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : (editingProductId ? <Edit3 className="h-5 w-5" /> : <Plus className="h-5 w-5" />)}
+                {uploading ? 'Enviando Imagem...' : (editingProductId ? 'Salvar Alterações' : 'Cadastrar Produto')}
               </button>
             </form>
           </div>

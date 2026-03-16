@@ -12,6 +12,7 @@ import Profile from './pages/Profile';
 import UnitDetails from './pages/UnitDetails';
 import BarberDashboard from './pages/BarberDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminProducts from './pages/AdminProducts';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
                 {/* Admin Routes */}
                 <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
                   <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/products" element={<AdminProducts />} />
                 </Route>
               </Route>
             </Route>
