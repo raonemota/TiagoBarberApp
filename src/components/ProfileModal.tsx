@@ -82,21 +82,21 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in fade-in zoom-in duration-300 ring-1 ring-[#262626]">
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-3xl w-full max-w-md p-8 shadow-2xl animate-in fade-in zoom-in duration-300 ring-1 ring-zinc-200 dark:ring-[#262626]">
         <div className="flex items-center justify-between mb-8">
-          <h3 className="text-2xl font-bold text-white tracking-tighter">Editar Perfil</h3>
-          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white hover:bg-[#262626] rounded-full transition-colors">
+          <h3 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tighter">Editar Perfil</h3>
+          <button onClick={onClose} className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-[#262626] rounded-full transition-colors">
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <div className="flex flex-col items-center mb-8">
           <div className="relative group">
-            <div className="h-24 w-24 rounded-full bg-[#262626] overflow-hidden ring-4 ring-[#1a1a1a] flex items-center justify-center">
+            <div className="h-24 w-24 rounded-full bg-zinc-100 dark:bg-[#262626] overflow-hidden ring-4 ring-white dark:ring-[#1a1a1a] flex items-center justify-center">
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
               ) : (
-                <UserIcon className="h-12 w-12 text-zinc-500" />
+                <UserIcon className="h-12 w-12 text-zinc-400 dark:text-zinc-500" />
               )}
               {uploading && (
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -118,18 +118,18 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               accept="image/*" 
             />
           </div>
-          <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Clique na câmera para mudar a foto</p>
+          <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Clique na câmera para mudar a foto</p>
         </div>
 
         <form onSubmit={handleUpdateProfile} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Seu Nome</label>
+            <label className="text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Seu Nome</label>
             <input 
               required
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border-none bg-[#262626] py-3 px-4 text-white focus:ring-2 focus:ring-[#8162ff]"
+              className="w-full rounded-xl border border-zinc-200 dark:border-none bg-zinc-50 dark:bg-[#262626] py-3 px-4 text-zinc-900 dark:text-white focus:ring-2 focus:ring-[#8162ff]"
             />
           </div>
 

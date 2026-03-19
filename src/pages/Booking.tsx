@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { ChevronLeft, ChevronRight, CheckCircle2, Scissors, Sparkles, Zap, Star, Clock, Calendar, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Scissors, Sparkles, Zap, Star, Clock, Calendar, X, RefreshCw } from 'lucide-react';
 import { format, addDays, startOfToday, addMinutes, parse, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { motion } from 'motion/react';
 
 const Mustache = ({ className }: { className?: string }) => (
   <svg 
@@ -54,6 +55,8 @@ export default function Booking() {
   const [step, setStep] = useState(1);
   const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [lastAppointment, setLastAppointment] = useState<any>(null);
+  const [showSuggestion, setShowSuggestion] = useState(false);
   
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedBarber, setSelectedBarber] = useState<string | null>(null);
@@ -76,7 +79,39 @@ export default function Booking() {
 
   useEffect(() => {
     fetchServicesAndBarbers();
-  }, []);
+    if (profile) {
+      fetchLastAppointment();
+    }
+  }, [profile]);
+
+  const fetchLastAppointment = async () => {
+    if (!profile) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id, 
+          service_id, 
+          barber_id,
+          service:services(id, name, price, duration_minutes),
+          barber:barbers(id, users:user_id(name, avatar_url))
+        `)
+        .eq('client_id', profile.id)
+        .eq('status', 'completed')
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        setLastAppointment(data);
+        setShowSuggestion(true);
+      }
+    } catch (error) {
+      console.error('Error fetching last appointment:', error);
+    }
+  };
 
   // Quando o serviço ou barbeiro mudar, pré-calcula a disponibilidade de 60 dias
   useEffect(() => {
@@ -346,11 +381,29 @@ export default function Booking() {
     return list;
   }, [defaultDates, customDate]);
 
+  const handleUseSuggestion = () => {
+    if (!lastAppointment) return;
+    
+    const service = lastAppointment.service;
+    const barberId = lastAppointment.barber_id;
+    
+    if (service) {
+      setSelectedServices([service]);
+    }
+    
+    if (barberId) {
+      setSelectedBarber(barberId);
+    }
+    
+    setShowSuggestion(false);
+    setStep(2); // Move to professional and time
+  };
+
   return (
-    <div className="mx-auto max-w-lg md:max-w-4xl lg:max-w-6xl bg-[#0a0502] min-h-screen pb-32">
+    <div className="mx-auto max-w-lg md:max-w-4xl lg:max-w-6xl bg-white dark:bg-[#0a0502] min-h-screen pb-32">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0a0502]/95 backdrop-blur-md px-4 py-2 border-b border-white/5 flex items-center -mx-4 mb-4">
-        <button onClick={() => step > 1 ? setStep(step - 1) : navigate('/')} className="p-2 text-gold hover:bg-white/5 rounded-full transition-colors">
+      <div className="sticky top-0 z-10 bg-white/95 dark:bg-[#0a0502]/95 backdrop-blur-md px-4 py-2 border-b border-zinc-200 dark:border-white/5 flex items-center -mx-4 mb-4">
+        <button onClick={() => step > 1 ? setStep(step - 1) : navigate('/')} className="p-2 text-gold hover:bg-zinc-100 dark:hover:bg-white/5 rounded-full transition-colors">
           <ChevronLeft className="h-5 w-5" />
         </button>
         <h1 className="ml-1 text-base font-bold gold-gradient-text uppercase tracking-widest">
@@ -361,6 +414,40 @@ export default function Booking() {
       </div>
 
       <div className="px-4 pb-4 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {step === 1 && showSuggestion && lastAppointment && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gold/10 border border-gold/20 rounded-2xl p-4 flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-gold/20 flex items-center justify-center text-gold">
+                <RefreshCw className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gold uppercase tracking-widest">Sugestão baseada no seu último serviço</p>
+                <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">
+                  {lastAppointment.service?.name} com {lastAppointment.barber?.users?.name?.split(' ')[0]}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleUseSuggestion}
+                className="px-4 py-2 bg-gold text-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-gold-light transition-colors"
+              >
+                Usar
+              </button>
+              <button 
+                onClick={() => setShowSuggestion(false)}
+                className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {step === 1 && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -374,11 +461,11 @@ export default function Booking() {
                     className={`w-full text-left p-3 rounded-2xl border transition-all duration-300 flex items-center gap-3 ${
                       isSelected 
                         ? 'border-gold bg-gold/10 shadow-[0_0_20px_rgba(212,175,55,0.15)]' 
-                        : 'border-white/5 bg-white/5 hover:border-gold/20'
+                        : 'border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 hover:border-gold/20'
                     }`}
                   >
                     <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0 ${
-                      isSelected ? 'bg-gold text-black scale-110' : 'bg-white/5 text-gold'
+                      isSelected ? 'bg-gold text-black scale-110' : 'bg-zinc-100 dark:bg-white/5 text-gold'
                     }`}>
                       <Icon className="h-6 w-6" />
                     </div>
@@ -386,7 +473,7 @@ export default function Booking() {
                     <div className="flex-1">
                       <div className="flex justify-between items-center mb-0.5">
                         <h3 className={`font-black text-sm uppercase tracking-tight transition-colors ${
-                          isSelected ? 'text-white' : 'text-zinc-200'
+                          isSelected ? 'text-zinc-900 dark:text-white' : 'text-zinc-700 dark:text-zinc-200'
                         }`}>
                           {service.name}
                         </h3>
@@ -394,8 +481,8 @@ export default function Booking() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1.5">
-                          <Clock className="h-3 w-3 text-zinc-600" />
-                          <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-bold">
+                          <Clock className="h-3 w-3 text-zinc-400 dark:text-zinc-600" />
+                          <span className="text-[9px] text-zinc-500 dark:text-zinc-500 uppercase tracking-widest font-bold">
                             Aprox. {service.duration_minutes} min
                           </span>
                         </div>
@@ -412,12 +499,12 @@ export default function Booking() {
             </div>
 
             {selectedServices.length > 0 && (
-              <div className="fixed bottom-[72px] left-0 right-0 z-50 p-4 bg-[#0a0502]/95 backdrop-blur-xl border-t border-white/10 animate-in slide-in-from-bottom-full duration-500 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+              <div className="fixed bottom-[72px] left-0 right-0 z-50 p-4 bg-white/95 dark:bg-[#0a0502]/95 backdrop-blur-xl border-t border-zinc-200 dark:border-white/10 animate-in slide-in-from-bottom-full duration-500 shadow-[0_-10px_30px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
                 <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
                   <div className="flex flex-col">
                     <p className="text-[9px] text-gold font-black uppercase tracking-[0.2em] mb-1">Total selecionado</p>
                     <div className="flex items-baseline gap-1">
-                      <p className="text-2xl font-black text-white tracking-tighter">R$ {totalPrice.toFixed(2).replace('.', ',')}</p>
+                      <p className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">R$ {totalPrice.toFixed(2).replace('.', ',')}</p>
                       <p className="text-[10px] text-zinc-500 font-bold uppercase">({selectedServices.length} {selectedServices.length === 1 ? 'item' : 'itens'})</p>
                     </div>
                   </div>
@@ -447,7 +534,7 @@ export default function Booking() {
                   className={`flex-shrink-0 flex flex-col items-center gap-2 p-2 rounded-2xl border transition-all ${
                     selectedBarber === 'any' 
                       ? 'border-gold bg-gold/10 shadow-[0_0_15px_rgba(212,175,55,0.2)]' 
-                      : 'border-white/10 bg-white/5'
+                      : 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5'
                   }`}
                 >
                   <div className={`h-16 w-16 rounded-xl overflow-hidden border-2 transition-all ${
@@ -461,13 +548,13 @@ export default function Booking() {
                     />
                   </div>
                   <span className={`text-[11px] font-bold uppercase tracking-tight ${
-                    selectedBarber === 'any' ? 'text-gold' : 'text-zinc-400'
+                    selectedBarber === 'any' ? 'text-gold' : 'text-zinc-500 dark:text-zinc-400'
                   }`}>
                     Sem preferência
                   </span>
                 </button>
                 {barbers.length === 0 && (
-                  <div className="flex-shrink-0 flex flex-col items-center justify-center p-8 rounded-2xl border border-dashed border-white/10 bg-white/5 w-full md:col-span-4 lg:col-span-6">
+                  <div className="flex-shrink-0 flex flex-col items-center justify-center p-8 rounded-2xl border border-dashed border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 w-full md:col-span-4 lg:col-span-6">
                     <p className="text-zinc-500 text-sm font-medium">Nenhum barbeiro disponível nesta unidade.</p>
                   </div>
                 )}
@@ -481,7 +568,7 @@ export default function Booking() {
                     className={`flex-shrink-0 flex flex-col items-center gap-2 p-2 rounded-2xl border transition-all ${
                       selectedBarber === barber.id 
                         ? 'border-gold bg-gold/10 shadow-[0_0_15px_rgba(212,175,55,0.2)]' 
-                        : 'border-white/10 bg-white/5'
+                        : 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5'
                     }`}
                   >
                     <div className={`h-16 w-16 rounded-xl overflow-hidden border-2 transition-all ${
@@ -508,7 +595,7 @@ export default function Booking() {
                       />
                     </div>
                     <span className={`text-[11px] font-bold uppercase tracking-tight ${
-                      selectedBarber === barber.id ? 'text-gold' : 'text-zinc-400'
+                      selectedBarber === barber.id ? 'text-gold' : 'text-zinc-500 dark:text-zinc-400'
                     }`}>
                       {(() => {
                         const userData = Array.isArray(barber.users) ? barber.users[0] : barber.users;
@@ -533,7 +620,7 @@ export default function Booking() {
                       const isCalculated = slotsPerDate[dateStr] !== undefined;
                       const slotsCount = isCalculated ? slotsPerDate[dateStr].length : -1;
 
-                      let statusColor = 'border-white/10 bg-white/5 text-zinc-400 hover:border-white/20';
+                      let statusColor = 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20';
                       let statusText = '';
 
                       if (isCalculated) {
@@ -583,7 +670,7 @@ export default function Booking() {
                         setCalendarViewDate(startOfMonth(selectedDate));
                         setIsCalendarModalOpen(true);
                       }}
-                      className="flex-shrink-0 flex flex-col items-center justify-center w-16 h-[84px] rounded-2xl border border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-white transition-colors"
+                      className="flex-shrink-0 flex flex-col items-center justify-center w-16 h-[84px] rounded-2xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-white/20 hover:text-zinc-900 dark:hover:text-white transition-colors"
                     >
                       <Calendar className="h-6 w-6 mb-1 opacity-80" />
                       <span className="text-[8px] font-black uppercase text-center leading-tight">Outras<br/>Datas</span>
@@ -598,11 +685,11 @@ export default function Booking() {
                   <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
                     {loading ? (
                        <div className="col-span-full text-center py-6">
-                         <p className="text-zinc-500 text-sm font-medium">Calculando horários...</p>
+                         <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Calculando horários...</p>
                        </div>
                     ) : availableTimes.length === 0 ? (
                       <div className="col-span-full text-center py-6">
-                        <p className="text-zinc-500 text-sm font-medium">Nenhum horário com tempo suficiente disponível.</p>
+                        <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Nenhum horário com tempo suficiente disponível.</p>
                       </div>
                     ) : (
                       availableTimes.map(time => (
@@ -612,7 +699,7 @@ export default function Booking() {
                           className={`py-3 rounded-xl border text-center font-bold text-sm transition-all ${
                             selectedTime === time 
                               ? 'border-gold bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)]' 
-                              : 'border-white/10 bg-white/5 text-zinc-400'
+                              : 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-500 dark:text-zinc-400'
                           }`}
                         >
                           {time}
@@ -631,8 +718,8 @@ export default function Booking() {
                 </button>
               </div>
             ) : (
-              <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl">
-                <p className="text-zinc-500 text-sm font-medium">Selecione um profissional para ver os horários</p>
+              <div className="text-center py-12 border border-dashed border-zinc-200 dark:border-white/10 rounded-3xl">
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">Selecione um profissional para ver os horários</p>
               </div>
             )}
           </div>
@@ -640,36 +727,36 @@ export default function Booking() {
 
         {step === 3 && selectedServices.length > 0 && selectedTime && (
           <div className="space-y-6">
-            <div className="dark-card p-6 space-y-6">
-              <div className="border-b border-white/5 pb-4">
-                <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest block mb-3">Serviços Selecionados</span>
+            <div className="bg-white dark:bg-[#1a1a1a] p-6 space-y-6 rounded-3xl border border-zinc-200 dark:border-white/5 shadow-sm">
+              <div className="border-b border-zinc-200 dark:border-white/5 pb-4">
+                <span className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest block mb-3">Serviços Selecionados</span>
                 <div className="space-y-2">
                   {selectedServices.map(s => (
                     <div key={s.id} className="flex justify-between items-center">
-                      <span className="font-bold text-zinc-100 text-sm">{s.name}</span>
+                      <span className="font-bold text-zinc-700 dark:text-zinc-100 text-sm">{s.name}</span>
                       <span className="text-gold text-sm font-bold">R$ {s.price.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
               </div>
               
-              <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Profissional</span>
-                <span className="font-bold text-zinc-100">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-white/5 pb-4">
+                <span className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Profissional</span>
+                <span className="font-bold text-zinc-700 dark:text-zinc-100">
                   {selectedBarber === 'any' ? 'Sem preferência' : barbers.find(b => b.id === selectedBarber)?.users?.name || 'Profissional'}
                 </span>
               </div>
               
-              <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Data e Hora</span>
-                <span className="font-bold text-zinc-100">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-white/5 pb-4">
+                <span className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Data e Hora</span>
+                <span className="font-bold text-zinc-700 dark:text-zinc-100">
                   {format(selectedDate, "dd/MM/yyyy")} às {selectedTime}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Duração Total</span>
-                <span className="font-bold text-zinc-100">{totalDuration} minutos</span>
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-white/5 pb-4">
+                <span className="text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest">Duração Total</span>
+                <span className="font-bold text-zinc-700 dark:text-zinc-100">{totalDuration} minutos</span>
               </div>
 
               <div className="flex justify-between items-center pt-2">
@@ -691,31 +778,31 @@ export default function Booking() {
 
       {/* Custom Calendar Modal */}
       {isCalendarModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-[#151515] p-6 rounded-3xl max-w-sm w-full shadow-2xl ring-1 ring-white/10 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/40 dark:bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#151515] p-6 rounded-3xl max-w-sm w-full shadow-2xl ring-1 ring-zinc-200 dark:ring-white/10 animate-in zoom-in-95 duration-200 border border-zinc-200 dark:border-white/5">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-black text-white uppercase tracking-tight">Selecionar Data</h3>
+              <h3 className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tight">Selecionar Data</h3>
               <button 
                 onClick={() => setIsCalendarModalOpen(false)} 
-                className="p-2 text-zinc-500 hover:text-white transition-colors bg-white/5 rounded-full"
+                className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors bg-zinc-100 dark:bg-white/5 rounded-full"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="flex items-center justify-between mb-4 bg-white/5 rounded-2xl p-2">
+            <div className="flex items-center justify-between mb-4 bg-zinc-50 dark:bg-white/5 rounded-2xl p-2">
               <button 
                 onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))}
-                className="p-2 text-gold hover:bg-white/10 rounded-xl transition-colors"
+                className="p-2 text-gold hover:bg-zinc-200 dark:hover:bg-white/10 rounded-xl transition-colors"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <span className="font-bold text-white capitalize text-sm">
+              <span className="font-bold text-zinc-900 dark:text-white capitalize text-sm">
                 {format(calendarViewDate, 'MMMM yyyy', { locale: ptBR })}
               </span>
               <button 
                 onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))}
-                className="p-2 text-gold hover:bg-white/10 rounded-xl transition-colors"
+                className="p-2 text-gold hover:bg-zinc-200 dark:hover:bg-white/10 rounded-xl transition-colors"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
@@ -723,7 +810,7 @@ export default function Booking() {
 
             <div className="grid grid-cols-7 gap-1 text-center mb-2">
               {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-                <div key={d} className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{d}</div>
+                <div key={d} className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{d}</div>
               ))}
             </div>
 
@@ -749,9 +836,9 @@ export default function Booking() {
                     }}
                     className={`
                       h-10 w-full rounded-xl flex items-center justify-center text-sm font-bold transition-all
-                      ${isDisabled ? 'text-zinc-700 opacity-50 cursor-not-allowed' : 
+                      ${isDisabled ? 'text-zinc-300 dark:text-zinc-700 opacity-50 cursor-not-allowed' : 
                         isSelected ? 'bg-gold text-black shadow-[0_0_15px_rgba(212,175,55,0.4)]' : 
-                        'text-zinc-300 hover:bg-white/10'}
+                        'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/10'}
                     `}
                   >
                     {format(day, 'd')}
@@ -765,14 +852,14 @@ export default function Booking() {
 
       {/* Success Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="dark-card p-8 max-w-sm w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 dark:bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#1a1a1a] p-8 max-w-sm w-full text-center space-y-6 animate-in fade-in zoom-in duration-300 rounded-3xl border border-zinc-200 dark:border-white/5 shadow-2xl">
             <div className="mx-auto w-20 h-20 bg-gold/10 text-gold rounded-full flex items-center justify-center border border-gold/20 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
               <CheckCircle2 className="w-10 h-10" />
             </div>
             <div>
               <h3 className="text-2xl font-black gold-gradient-text uppercase tracking-widest">Sucesso!</h3>
-              <p className="text-zinc-500 mt-2 font-medium">
+              <p className="text-zinc-500 dark:text-zinc-400 mt-2 font-medium">
                 {searchParams.get('reschedule') 
                   ? 'Seu horário foi reagendado com sucesso.' 
                   : 'Seu horário foi agendado com sucesso.'}

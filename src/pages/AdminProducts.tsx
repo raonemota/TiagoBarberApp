@@ -155,14 +155,14 @@ export default function AdminProducts() {
   );
 
   return (
-    <div className="min-h-screen bg-black p-4 md:p-8 space-y-8 pb-24">
+    <div className="min-h-screen bg-white dark:bg-black p-4 md:p-8 space-y-8 pb-24 transition-colors duration-300">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <Link to="/admin" className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors text-sm mb-2">
+          <Link to="/admin" className="inline-flex items-center gap-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors text-sm mb-2">
             <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
           </Link>
-          <h1 className="text-3xl font-bold tracking-tighter text-white">Todos os Produtos</h1>
+          <h1 className="text-3xl font-bold tracking-tighter text-zinc-900 dark:text-white">Todos os Produtos</h1>
           <p className="text-zinc-500">Lista completa e compacta de produtos da barbearia.</p>
         </div>
         <button 
@@ -189,23 +189,23 @@ export default function AdminProducts() {
           placeholder="Buscar produtos..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-[#1a1a1a] border-none rounded-2xl py-3 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all"
+          className="w-full bg-zinc-100 dark:bg-[#1a1a1a] border-none rounded-2xl py-3 pl-12 pr-4 text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all"
         />
       </div>
 
       {/* Compact List */}
-      <div className="bg-[#1a1a1a] rounded-2xl ring-1 ring-[#262626] overflow-hidden">
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl ring-1 ring-zinc-200 dark:ring-[#262626] overflow-hidden shadow-sm dark:shadow-none">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-[#262626] bg-black/20">
+              <tr className="border-b border-zinc-200 dark:border-[#262626] bg-zinc-50/50 dark:bg-black/20">
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Produto</th>
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Descrição</th>
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500 text-right">Preço</th>
                 <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-zinc-500 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#262626]">
+            <tbody className="divide-y divide-zinc-200 dark:divide-[#262626]">
               {loading ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center">
@@ -220,19 +220,19 @@ export default function AdminProducts() {
                 </tr>
               ) : (
                 filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-white/[0.02] transition-colors group">
+                  <tr key={product.id} className="hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors group">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-[#262626] overflow-hidden flex-shrink-0">
+                        <div className="h-10 w-10 rounded-lg bg-zinc-100 dark:bg-[#262626] overflow-hidden flex-shrink-0">
                           {product.image_url ? (
                             <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-zinc-700">
+                            <div className="h-full w-full flex items-center justify-center text-zinc-400 dark:text-zinc-700">
                               <Package className="h-5 w-5" />
                             </div>
                           )}
                         </div>
-                        <span className="font-bold text-white text-sm">{product.name}</span>
+                        <span className="font-bold text-zinc-900 dark:text-white text-sm">{product.name}</span>
                       </div>
                     </td>
                     <td className="px-6 py-3">
@@ -253,7 +253,7 @@ export default function AdminProducts() {
                             setProductPrice(product.price.toString());
                             setIsProductModalOpen(true);
                           }}
-                          className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
+                          className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
                         >
                           <Edit3 className="h-4 w-4" />
                         </button>
@@ -275,18 +275,18 @@ export default function AdminProducts() {
 
       {/* Modal Cadastrar Produto */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-md p-8 shadow-2xl ring-1 ring-[#262626]">
-            <div className="flex items-center justify-between mb-8">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-3xl w-full max-w-md p-6 md:p-8 shadow-2xl ring-1 ring-zinc-200 dark:ring-[#262626] my-auto relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-[#8162ff]/10 text-[#8162ff] rounded-xl">
                   <Package className="h-6 w-6" />
                 </div>
-                <h3 className="text-2xl font-bold text-white tracking-tighter">
+                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tighter">
                   {editingProductId ? 'Editar Produto' : 'Novo Produto'}
                 </h3>
               </div>
-              <button onClick={() => setIsProductModalOpen(false)} className="p-2 text-zinc-500 hover:text-white transition-colors">
+              <button onClick={() => setIsProductModalOpen(false)} className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">
                 <X className="h-6 w-6" />
               </button>
             </div>
@@ -295,11 +295,11 @@ export default function AdminProducts() {
               <div className="space-y-4">
                 <div className="flex justify-center mb-6">
                   <div className="relative group">
-                    <div className="w-24 h-24 rounded-2xl bg-[#262626] flex items-center justify-center overflow-hidden ring-2 ring-[#8162ff]/20">
+                    <div className="w-24 h-24 rounded-2xl bg-zinc-100 dark:bg-[#262626] flex items-center justify-center overflow-hidden ring-2 ring-[#8162ff]/20">
                       {productAvatar ? (
                         <img src={URL.createObjectURL(productAvatar)} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
-                        <ImageIcon className="h-8 w-8 text-zinc-700" />
+                        <ImageIcon className="h-8 w-8 text-zinc-400 dark:text-zinc-700" />
                       )}
                     </div>
                     <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-2xl">
@@ -316,7 +316,7 @@ export default function AdminProducts() {
                     required
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
-                    className="w-full bg-[#262626] border-none rounded-xl py-3 px-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all"
+                    className="w-full bg-zinc-100 dark:bg-[#262626] border-none rounded-xl py-3 px-4 text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all"
                     placeholder="Ex: Pomada Modeladora"
                   />
                 </div>
@@ -326,7 +326,7 @@ export default function AdminProducts() {
                   <textarea 
                     value={productDescription}
                     onChange={(e) => setProductDescription(e.target.value)}
-                    className="w-full bg-[#262626] border-none rounded-xl py-3 px-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all h-24 resize-none"
+                    className="w-full bg-zinc-100 dark:bg-[#262626] border-none rounded-xl py-3 px-4 text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all h-24 resize-none"
                     placeholder="Breve descrição do produto..."
                   />
                 </div>
@@ -341,7 +341,7 @@ export default function AdminProducts() {
                       required
                       value={productPrice}
                       onChange={(e) => setProductPrice(e.target.value)}
-                      className="w-full bg-[#262626] border-none rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all"
+                      className="w-full bg-zinc-100 dark:bg-[#262626] border-none rounded-xl py-3 pl-10 pr-4 text-zinc-900 dark:text-white placeholder:text-zinc-500 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-[#8162ff] transition-all"
                       placeholder="0,00"
                     />
                   </div>

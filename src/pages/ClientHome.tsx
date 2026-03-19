@@ -258,11 +258,11 @@ export default function ClientHome() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-12 rounded-xl bg-white/5"></div>
-        <div className="h-40 rounded-2xl bg-white/5"></div>
+        <div className="h-12 rounded-xl bg-zinc-200 dark:bg-white/5"></div>
+        <div className="h-40 rounded-2xl bg-zinc-200 dark:bg-white/5 shadow-sm"></div>
         <div className="space-y-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-24 rounded-2xl bg-white/5"></div>
+            <div key={i} className="h-24 rounded-2xl bg-zinc-200 dark:bg-white/5 shadow-sm"></div>
           ))}
         </div>
       </div>
@@ -277,7 +277,7 @@ export default function ClientHome() {
         className="flex items-center justify-center gap-2 mx-auto w-fit cursor-pointer group"
       >
         <MapPin className="h-3 w-3 text-gold/60 group-hover:text-gold transition-colors" />
-        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em] group-hover:text-white transition-colors">
+        <span className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.2em] group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
           {selectedUnit ? selectedUnit.name : 'Selecione uma unidade'}
         </span>
         {units.length > 1 && (
@@ -286,42 +286,23 @@ export default function ClientHome() {
               e.stopPropagation();
               setIsUnitModalOpen(true);
             }}
-            className="hover:text-gold transition-colors text-zinc-600"
+            className="hover:text-gold transition-colors text-zinc-400 dark:text-zinc-600"
           >
             <Settings2 className="h-3 w-3" />
           </button>
         )}
       </div>
 
-      {/* Promotional Banners 
-      <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar snap-x md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-visible">
-        {BANNERS.map((banner) => (
-          <motion.div
-            key={banner.id}
-            whileTap={{ scale: 0.98 }}
-            className={`flex-shrink-0 w-[280px] md:w-full snap-center rounded-2xl p-4 bg-gradient-to-br ${banner.color} border border-gold/10 flex items-center gap-4`}
-          >
-            <div className="h-10 w-10 rounded-full bg-gold/20 flex items-center justify-center text-gold">
-              <banner.icon className="h-5 w-5" />
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-white uppercase tracking-tight">{banner.title}</h4>
-              <p className="text-[10px] text-zinc-400 font-medium leading-tight mt-0.5">{banner.description}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>*/}
-
       {/* New Appointment Button - Creative */}
       <button 
         onClick={() => navigate(`/booking${selectedUnit ? `?unit=${selectedUnit.id}` : ''}`)}
-        className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all active:scale-[0.98]"
+        className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all active:scale-[0.98] shadow-sm"
       >
         <div className="absolute inset-0 bg-gradient-to-r from-gold/50 via-gold-light to-gold/50 animate-gradient-x"></div>
-        <div className="relative flex items-center justify-between bg-[#0a0502] rounded-[15px] p-6">
+        <div className="relative flex items-center justify-between bg-white dark:bg-[#0a0502] rounded-[15px] p-6 border border-zinc-200 dark:border-white/5">
           <div className="flex flex-col items-start text-left">
             <span className="text-xs font-bold text-gold uppercase tracking-widest mb-1">Agende agora</span>
-            <span className="text-xl font-black text-white uppercase tracking-tighter">Novo Horário</span>
+            <span className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">Novo Horário</span>
           </div>
           <div className="h-12 w-12 rounded-full bg-gold flex items-center justify-center text-black shadow-[0_0_20px_rgba(212,175,55,0.4)] group-hover:scale-110 transition-transform">
             <Plus className="h-6 w-6 stroke-[3px]" />
@@ -334,7 +315,7 @@ export default function ClientHome() {
         <section>
           <div className="flex items-center justify-between mb-4 px-2">
             <h3 className="text-[10px] font-bold text-gold uppercase tracking-widest">Seus Agendamentos</h3>
-            <span className="h-[1px] flex-1 bg-white/5 mx-4"></span>
+            <span className="h-[1px] flex-1 bg-zinc-200 dark:bg-white/5 mx-4"></span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {groupedFutureAppointments.map((group, index) => {
@@ -347,12 +328,12 @@ export default function ClientHome() {
                 <div 
                   key={index} 
                   onClick={() => setSelectedGroup(group)}
-                  className="dark-card p-5 flex flex-col gap-4 cursor-pointer hover:border-gold/30 transition-all"
+                  className="bg-white dark:bg-[#1a1a1a] p-5 flex flex-col gap-4 cursor-pointer hover:border-gold/30 transition-all rounded-3xl border border-zinc-200 dark:border-white/5 shadow-sm"
                 >
-                  <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                  <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-4">
                     <div className="flex items-center gap-3">
                       <Calendar className="h-4 w-4 text-gold" />
-                      <span className="font-bold capitalize text-[11px] tracking-wide text-zinc-300">
+                      <span className="font-bold capitalize text-[11px] tracking-wide text-zinc-600 dark:text-zinc-300">
                         {format(parseISO(firstApt.date), "EEEE, d 'de' MMMM", { locale: ptBR })}
                       </span>
                     </div>
@@ -363,15 +344,15 @@ export default function ClientHome() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-black text-lg uppercase tracking-tight text-white truncate max-w-[200px]">
+                      <p className="font-black text-lg uppercase tracking-tight text-zinc-900 dark:text-white truncate max-w-[200px]">
                         {serviceNames}
                       </p>
-                      <p className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-1 uppercase tracking-widest font-bold">
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1 uppercase tracking-widest font-bold">
                         <UserIcon className="h-3 w-3 text-gold" />
                         {barberName}
                       </p>
                     </div>
-                    <button className="p-2 rounded-lg bg-white/5 text-gold hover:bg-gold/10 transition-colors">
+                    <button className="p-2 rounded-lg bg-zinc-100 dark:bg-white/5 text-gold hover:bg-gold/10 transition-colors">
                       <ChevronRight className="h-5 w-5" />
                     </button>
                   </div>
@@ -386,7 +367,7 @@ export default function ClientHome() {
       <section>
         <div className="flex items-center justify-between mb-4 px-2">
           <h3 className="text-[10px] font-bold text-gold uppercase tracking-widest">Nossos Barbeiros</h3>
-          <span className="h-[1px] flex-1 bg-white/5 mx-4"></span>
+          <span className="h-[1px] flex-1 bg-zinc-200 dark:bg-white/5 mx-4"></span>
         </div>
         <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar snap-x px-2 md:grid md:grid-cols-3 lg:grid-cols-4 md:overflow-visible">
           {barbers.map((barber) => {
@@ -395,7 +376,7 @@ export default function ClientHome() {
               <motion.div
                 key={barber.id}
                 whileHover={{ y: -4 }}
-                className="flex-shrink-0 w-[180px] md:w-full snap-center bg-[#1a1a1a] rounded-2xl overflow-hidden border border-white/5 shadow-2xl group"
+                className="flex-shrink-0 w-[180px] md:w-full snap-center bg-white dark:bg-[#1a1a1a] rounded-2xl overflow-hidden border border-zinc-200 dark:border-white/5 shadow-md dark:shadow-2xl group"
               >
                 <div className="relative h-32 overflow-hidden">
                   <img 
@@ -407,10 +388,10 @@ export default function ClientHome() {
                       (e.target as HTMLImageElement).src = BARBER_ILLUSTRATION;
                     }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a1a] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-[#1a1a1a] via-transparent to-transparent" />
                   <div className="absolute bottom-3 left-3">
                     <p className="text-[8px] font-bold text-gold uppercase tracking-widest mb-0.5">Profissional</p>
-                    <h4 className="text-sm font-black text-white uppercase tracking-tighter leading-none">
+                    <h4 className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tighter leading-none">
                       {userData?.name?.split(' ')[0] || 'Barbeiro'}
                     </h4>
                   </div>
@@ -423,7 +404,7 @@ export default function ClientHome() {
                     </div>
                     <div>
                       <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-0.5">Especialidades</p>
-                      <p className="text-[10px] text-zinc-300 font-medium line-clamp-1">
+                      <p className="text-[10px] text-zinc-600 dark:text-zinc-300 font-medium line-clamp-1">
                         {(barber as any).specialties || 'Corte & Barba'}
                       </p>
                     </div>
@@ -431,7 +412,7 @@ export default function ClientHome() {
 
                   <button
                     onClick={() => navigate(`/booking?barber=${barber.id}`)}
-                    className="w-full py-2.5 bg-white text-black rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-gold hover:text-white transition-all duration-300 flex items-center justify-center gap-1.5"
+                    className="w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-gold hover:text-white transition-all duration-300 flex items-center justify-center gap-1.5"
                   >
                     Agendar
                     <ChevronRight className="h-3 w-3" />
@@ -447,7 +428,7 @@ export default function ClientHome() {
       <section>
         <div className="flex items-center justify-between mb-4 px-2">
           <h3 className="text-[10px] font-bold text-gold uppercase tracking-widest">Serviços Populares</h3>
-          <span className="h-[1px] flex-1 bg-white/5 mx-4"></span>
+          <span className="h-[1px] flex-1 bg-zinc-200 dark:bg-white/5 mx-4"></span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {featuredServices.map((service) => {
@@ -456,24 +437,24 @@ export default function ClientHome() {
               <button
                 key={service.id}
                 onClick={() => navigate(`/booking?service=${service.id}${selectedUnit ? `&unit=${selectedUnit.id}` : ''}`)}
-                className="w-full dark-card p-3 flex items-center gap-3 group hover:border-gold/30 transition-all duration-300"
+                className="w-full bg-white dark:bg-[#1a1a1a] p-3 flex items-center gap-3 group hover:border-gold/30 transition-all duration-300 rounded-3xl border border-zinc-200 dark:border-white/5 shadow-sm"
               >
                 <div className="h-12 w-12 rounded-xl bg-gold/5 flex items-center justify-center text-gold group-hover:scale-110 transition-transform duration-300 border border-gold/10 shrink-0">
                   <Icon className="h-6 w-6" />
                 </div>
                 <div className="flex-1 text-left">
                   <div className="flex justify-between items-center mb-0.5">
-                    <p className="font-black text-sm text-white uppercase tracking-tight">{service.name}</p>
+                    <p className="font-black text-sm text-zinc-900 dark:text-white uppercase tracking-tight">{service.name}</p>
                     <p className="font-black text-sm text-gold">R$ {service.price.toFixed(2).replace('.', ',')}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Clock className="h-3 w-3 text-zinc-600" />
-                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
+                    <Clock className="h-3 w-3 text-zinc-400 dark:text-zinc-600" />
+                    <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest">
                       Aprox. {service.duration_minutes} min
                     </p>
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-gold transition-colors" />
+                <ChevronRight className="h-4 w-4 text-zinc-400 dark:text-zinc-600 group-hover:text-gold transition-colors" />
               </button>
             );
           })}
@@ -481,7 +462,7 @@ export default function ClientHome() {
         
         <button 
           onClick={() => navigate(`/booking${selectedUnit ? `?unit=${selectedUnit.id}` : ''}`)}
-          className="w-full mt-6 py-4 rounded-xl border border-white/5 text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-white/5 hover:text-zinc-300 transition-all"
+          className="w-full mt-6 py-4 rounded-xl border border-zinc-200 dark:border-white/5 text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:bg-zinc-100 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-300 transition-all"
         >
           Ver todos os serviços <ChevronRight className="h-3 w-3" />
         </button>
@@ -489,14 +470,14 @@ export default function ClientHome() {
 
       {/* Unit Selection Modal */}
       {isUnitModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-6">
-          <div className="w-full max-w-sm space-y-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 dark:bg-black/90 backdrop-blur-md p-6">
+          <div className="w-full max-w-sm space-y-8 bg-white dark:bg-[#1a1a1a] p-8 rounded-3xl border border-zinc-200 dark:border-white/5 shadow-2xl">
             <div className="text-center space-y-2">
               <div className="inline-flex p-4 rounded-full bg-gold/10 text-gold mb-4">
                 <MapPin className="h-8 w-8" />
               </div>
-              <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Escolha a Unidade</h2>
-              <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Selecione onde deseja ser atendido</p>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter">Escolha a Unidade</h2>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest">Selecione onde deseja ser atendido</p>
             </div>
 
             <div className="space-y-4">
@@ -507,13 +488,15 @@ export default function ClientHome() {
                   className={`w-full p-6 rounded-2xl border transition-all text-left flex items-center justify-between group ${
                     selectedUnit?.id === unit.id 
                       ? 'bg-gold/10 border-gold/50' 
-                      : 'bg-white/5 border-white/5 hover:border-gold/30'
+                      : 'bg-zinc-50 dark:bg-white/5 border-zinc-200 dark:border-white/5 hover:border-gold/30'
                   }`}
                 >
                   <div>
-                    <h3 className="font-black text-white uppercase tracking-tight group-hover:text-gold transition-colors">{unit.name}</h3>
+                    <h3 className={`font-black uppercase tracking-tight group-hover:text-gold transition-colors ${
+                      selectedUnit?.id === unit.id ? 'text-gold' : 'text-zinc-900 dark:text-white'
+                    }`}>{unit.name}</h3>
                   </div>
-                  <ChevronRight className={`h-5 w-5 ${selectedUnit?.id === unit.id ? 'text-gold' : 'text-zinc-700'}`} />
+                  <ChevronRight className={`h-5 w-5 ${selectedUnit?.id === unit.id ? 'text-gold' : 'text-zinc-400'}`} />
                 </button>
               ))}
             </div>
@@ -521,7 +504,7 @@ export default function ClientHome() {
             {selectedUnit && (
               <button 
                 onClick={() => setIsUnitModalOpen(false)}
-                className="w-full py-4 text-zinc-500 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors"
+                className="w-full py-4 text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
                 Fechar
               </button>
@@ -533,16 +516,16 @@ export default function ClientHome() {
       {/* Appointment Details Modal */}
       <AnimatePresence>
         {selectedGroup && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 dark:bg-black/80 backdrop-blur-sm p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="dark-card p-8 max-w-md w-full space-y-8 relative"
+              className="bg-white dark:bg-[#1a1a1a] rounded-3xl p-8 max-w-md w-full space-y-8 relative border border-zinc-200 dark:border-white/5 shadow-2xl"
             >
               <button 
                 onClick={() => setSelectedGroup(null)}
-                className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white transition-colors"
+                className="absolute top-4 right-4 p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -551,16 +534,16 @@ export default function ClientHome() {
                 <div className="mx-auto w-16 h-16 bg-gold/10 text-gold rounded-2xl flex items-center justify-center border border-gold/20 mb-4">
                   <Calendar className="h-8 w-8" />
                 </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Detalhes do Agendamento</h3>
-                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Confira as informações abaixo</p>
+                <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">Detalhes do Agendamento</h3>
+                <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Confira as informações abaixo</p>
               </div>
 
-              <div className="space-y-4 bg-white/5 rounded-2xl p-6 border border-white/5">
-                <div className="flex justify-between items-start border-b border-white/5 pb-4">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Serviço(s)</span>
+              <div className="space-y-4 bg-zinc-50 dark:bg-white/5 rounded-2xl p-6 border border-zinc-200 dark:border-white/5">
+                <div className="flex justify-between items-start border-b border-zinc-200 dark:border-white/5 pb-4">
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mt-1">Serviço(s)</span>
                   <div className="text-right space-y-1">
                     {selectedGroup.map(apt => (
-                      <span key={apt.id} className="font-black text-white uppercase block text-sm">
+                      <span key={apt.id} className="font-black text-zinc-900 dark:text-white uppercase block text-sm">
                         {apt.service?.name}
                       </span>
                     ))}
@@ -568,22 +551,22 @@ export default function ClientHome() {
                 </div>
                 
                 <div className="flex justify-between items-center pt-1">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Profissional</span>
-                  <span className="font-black text-white uppercase">{selectedGroup[0].barber?.users?.name}</span>
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Profissional</span>
+                  <span className="font-black text-zinc-900 dark:text-white uppercase">{selectedGroup[0].barber?.users?.name}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Data</span>
-                  <span className="font-black text-white uppercase">{format(parseISO(selectedGroup[0].date), "dd 'de' MMMM", { locale: ptBR })}</span>
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Data</span>
+                  <span className="font-black text-zinc-900 dark:text-white uppercase">{format(parseISO(selectedGroup[0].date), "dd 'de' MMMM", { locale: ptBR })}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Horário</span>
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Horário</span>
                   <span className="font-black text-gold uppercase">
                     {selectedGroup[0].start_time.substring(0, 5)} 
                     {selectedGroup[selectedGroup.length - 1].end_time && ` - ${selectedGroup[selectedGroup.length - 1].end_time?.substring(0, 5)}`}
                   </span>
                 </div>
-                <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Valor Total</span>
+                <div className="flex justify-between items-center pt-4 border-t border-zinc-200 dark:border-white/5">
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Valor Total</span>
                   <span className="font-black text-xl text-gold">
                     R$ {selectedGroup.reduce((acc, apt) => acc + (apt.service?.price || 0), 0).toFixed(2).replace('.', ',')}
                   </span>
@@ -593,7 +576,7 @@ export default function ClientHome() {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => handleReschedule(selectedGroup)}
-                  className="flex items-center justify-center gap-2 py-4 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/10 transition-all"
+                  className="flex items-center justify-center gap-2 py-4 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-200 dark:hover:bg-white/10 transition-all"
                 >
                   <RefreshCw className="h-4 w-4" /> Reagendar
                 </button>
@@ -612,14 +595,14 @@ export default function ClientHome() {
 
       {/* Modal de Confirmação de Cancelamento Personalizado */}
       {isCancelModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-[#1a1a1a] rounded-3xl w-full max-w-sm p-8 shadow-2xl ring-1 ring-red-500/20 animate-in zoom-in duration-300">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/40 dark:bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-3xl w-full max-w-sm p-8 shadow-2xl ring-1 ring-zinc-200 dark:ring-red-500/20 animate-in zoom-in duration-300 border border-zinc-200 dark:border-white/5">
             <div className="text-center space-y-4">
               <div className="mx-auto w-16 h-16 bg-red-500/10 rounded-2xl border border-red-500/20 flex items-center justify-center text-red-500 mb-6">
                 <Trash2 className="h-8 w-8" />
               </div>
-              <h3 className="text-xl font-black text-white uppercase tracking-tight">Cancelar Agendamento?</h3>
-              <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">
+              <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">Cancelar Agendamento?</h3>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest">
                 Esta ação não pode ser desfeita. O horário ficará livre para outro cliente.
               </p>
               
@@ -627,7 +610,7 @@ export default function ClientHome() {
                 <button 
                   onClick={() => setIsCancelModalOpen(false)}
                   disabled={cancelling}
-                  className="flex-1 py-4 rounded-xl border border-white/10 text-white text-[10px] font-black uppercase tracking-widest hover:bg-white/5 transition-colors"
+                  className="flex-1 py-4 rounded-xl border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors"
                 >
                   Voltar
                 </button>

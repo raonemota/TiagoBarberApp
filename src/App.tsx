@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { DashboardLayout } from './components/DashboardLayout';
 
@@ -13,15 +14,18 @@ import UnitDetails from './pages/UnitDetails';
 import BarberDashboard from './pages/BarberDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
+import SubscriptionClub from './pages/SubscriptionClub';
 
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <NotificationProvider>
-          <Routes>
+      <ThemeProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/club" element={<SubscriptionClub />} />
 
             {/* Protected Routes */}
             <Route element={<ProtectedRoute />}>
@@ -47,6 +51,7 @@ export default function App() {
           </Routes>
         </NotificationProvider>
       </AuthProvider>
-    </BrowserRouter>
+    </ThemeProvider>
+  </BrowserRouter>
   );
 }

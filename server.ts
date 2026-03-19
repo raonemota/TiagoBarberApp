@@ -233,6 +233,30 @@ async function startServer() {
     }
   });
 
+  // Proxy endpoint for updating services
+  app.patch('/api/services/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description, price, duration_minutes } = req.body;
+      
+      const { data, error } = await supabase
+        .from('services')
+        .update({ name, description, price, duration_minutes })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        console.error('Supabase error in proxy:', error);
+        return res.status(400).json(error);
+      }
+
+      res.json(data);
+    } catch (error: any) {
+      console.error('Proxy error:', error);
+      res.status(500).json({ message: error.message || 'Internal server error' });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
